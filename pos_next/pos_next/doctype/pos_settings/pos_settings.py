@@ -130,7 +130,7 @@ def create_default_settings(pos_profile):
 	doc = frappe.new_doc("POS Settings")
 	doc.pos_profile = pos_profile
 	doc.enabled = 1
-	doc.insert()
+	doc.insert(ignore_permissions=True)
 
 	return doc.as_dict()
 
