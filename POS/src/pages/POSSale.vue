@@ -1229,10 +1229,12 @@ onMounted(async () => {
 
 	// Global keyboard shortcuts
 	const handleGlobalKeydown = (event) => {
-		// Skip if any dialog is open or if user is typing in an input/textarea
+		// Skip if any dialog is open
 		if (uiStore.isAnyDialogOpen) return;
 		const tag = document.activeElement?.tagName;
-		if (tag === "INPUT" || tag === "TEXTAREA") return;
+		const isFunctionKey = event.key.startsWith("F") && !isNaN(event.key.slice(1));
+		// F-keys work even when an input/textarea is focused; other shortcuts don't
+		if (!isFunctionKey && (tag === "INPUT" || tag === "TEXTAREA")) return;
 
 		if (event.key === "F4") {
 			event.preventDefault();
@@ -2153,7 +2155,9 @@ async function handlePaymentCompleted(paymentData) {
 					);
 				} catch (error) {
 					log.error("Offline auto-print error:", error);
-					uiStore.showSuccess(offlineReceiptName, grandTotal, paymentData.paid_amount);
+					if (posSettingsStore.showInvoiceSuccessDialog) {
+						uiStore.showSuccess(offlineReceiptName, grandTotal, paymentData.paid_amount);
+					}
 					showWarning(
 						__("Invoice {0} saved offline but print failed — open Print from the success dialog", [
 							offlineReceiptName,
@@ -2161,7 +2165,9 @@ async function handlePaymentCompleted(paymentData) {
 					);
 				}
 			} else {
-				uiStore.showSuccess(offlineReceiptName, grandTotal, paymentData.paid_amount);
+				if (posSettingsStore.showInvoiceSuccessDialog) {
+					uiStore.showSuccess(offlineReceiptName, grandTotal, paymentData.paid_amount);
+				}
 				showSuccess(__("Invoice saved offline. Will sync when online"));
 			}
 		} else {
@@ -2223,7 +2229,9 @@ async function handlePaymentCompleted(paymentData) {
 						showWarning(__("Invoice {0} created but print failed", [invoiceName]));
 					}
 				} else {
-					uiStore.showSuccess(invoiceName, invoiceTotal, paidAmount);
+					if (posSettingsStore.showInvoiceSuccessDialog) {
+						uiStore.showSuccess(invoiceName, invoiceTotal, paidAmount);
+					}
 					showSuccess(__("Invoice {0} created successfully", [invoiceName]));
 				}
 			}
