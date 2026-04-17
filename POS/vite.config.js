@@ -11,6 +11,34 @@ const buildVersion = process.env.POS_NEXT_BUILD_VERSION || Date.now().toString()
 const enableSourceMap = process.env.POS_NEXT_ENABLE_SOURCEMAP === "true";
 
 /**
+ * Vite plugin to inject pos_guard.js into the generated pos.html after each build.
+ * easy_entry's pos_guard.js cannot be injected via app_include_js because /pos is a
+ * standalone SPA that bypasses Frappe's normal hook system. Without this, bench updates
+ * and npm builds silently drop the guard.
+ */
+function posGuardInjectPlugin() {
+	return {
+		name: "pos-guard-inject",
+		apply: "build",
+		async closeBundle() {
+			const htmlPath = path.resolve(__dirname, "../pos_next/www/pos.html")
+			try {
+				let html = await fs.readFile(htmlPath, "utf8")
+				const marker = "{% if easy_entry_installed %}"
+				if (!html.includes(marker)) {
+					const injection = `          {% if easy_entry_installed %}\n          <script src="/assets/easy_entry/js/pos_guard.js"></script>\n          {% endif %}\n`
+					html = html.replace("</body>", injection + "          </body>")
+					await fs.writeFile(htmlPath, html, "utf8")
+					console.log("\n✓ pos_guard.js injected into pos.html")
+				}
+			} catch (e) {
+				console.warn("\n⚠ Could not inject pos_guard.js:", e.message)
+			}
+		},
+	}
+}
+
+/**
  * Vite plugin to write build version to version.json file
  * This enables cache busting and version tracking
  */
@@ -47,6 +75,7 @@ function posNextBuildVersionPlugin(version) {
 export default defineConfig({
 	plugins: [
 		posNextBuildVersionPlugin(buildVersion),
+		posGuardInjectPlugin(),
 		frappeui({
 			frappeProxy: true,
 			jinjaBootData: true,

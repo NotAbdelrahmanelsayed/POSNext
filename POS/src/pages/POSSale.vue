@@ -2199,7 +2199,9 @@ async function handlePaymentCompleted(paymentData) {
 					);
 				} catch (error) {
 					log.error("Offline auto-print error:", error);
-					uiStore.showSuccess(offlineReceiptName, grandTotal, paymentData.paid_amount);
+					if (posSettingsStore.showInvoiceSuccessDialog) {
+						uiStore.showSuccess(offlineReceiptName, grandTotal, paymentData.paid_amount);
+					}
 					showWarning(
 						__(
 							"Invoice {0} saved offline but print failed — open Print from the success dialog",
@@ -2208,7 +2210,9 @@ async function handlePaymentCompleted(paymentData) {
 					);
 				}
 			} else {
-				uiStore.showSuccess(offlineReceiptName, grandTotal, paymentData.paid_amount);
+				if (posSettingsStore.showInvoiceSuccessDialog) {
+					uiStore.showSuccess(offlineReceiptName, grandTotal, paymentData.paid_amount);
+				}
 				showSuccess(__("Invoice saved offline. Will sync when online"));
 			}
 		} else {
@@ -2276,7 +2280,9 @@ async function handlePaymentCompleted(paymentData) {
 						showWarning(__("Invoice {0} created but print failed", [invoiceName]));
 					}
 				} else {
-					uiStore.showSuccess(invoiceName, invoiceTotal, paidAmount);
+					if (posSettingsStore.showInvoiceSuccessDialog) {
+						uiStore.showSuccess(invoiceName, invoiceTotal, paidAmount);
+					}
 					showSuccess(__("Invoice {0} created successfully", [invoiceName]));
 				}
 			}

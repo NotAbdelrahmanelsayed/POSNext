@@ -431,6 +431,13 @@
    "label": "Enable Silent Print"
   },
   {
+   "default": "1",
+   "description": "Show a confirmation dialog with invoice details after successful payment",
+   "fieldname": "show_invoice_success_dialog",
+   "fieldtype": "Check",
+   "label": "Show Invoice Success Dialog"
+  },
+  {
    "collapsible": 1,
    "fieldname": "section_break_delivery",
    "fieldtype": "Section Break",
