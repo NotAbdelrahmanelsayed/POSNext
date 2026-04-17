@@ -363,6 +363,11 @@
 												:label="__('Silent Print')"
 												:description="__('Send receipts directly to a thermal printer via QZ Tray (no browser dialog)')"
 											/>
+											<CheckboxField
+												v-model="settings.show_invoice_success_dialog"
+												:label="__('Show Invoice Success Dialog')"
+												:description="__('Show a confirmation popup after each successful payment')"
+											/>
 
 											<!-- QZ Tray Printer Settings (shown when silent print is enabled) -->
 											<div v-if="settings.silent_print" class="ps-6 flex flex-col gap-3 border-s-2 border-teal-200">
@@ -579,8 +584,10 @@ import { logger } from "@/utils/logger"
 import { usePOSEvents } from "@/composables/usePOSEvents"
 import TranslatedHTML from "../common/TranslatedHTML.vue"
 import { useQzTray } from "@/composables/useQzTray"
+import { usePOSSettingsStore } from "@/stores/posSettings"
 
 const log = logger.create('POSSettings')
+const posSettingsStore = usePOSSettingsStore()
 const { detectSettingsChanges, updateSettingsSnapshot, emitStockSyncConfigured } = usePOSEvents()
 const { showSuccess, showError } = useToast()
 
@@ -615,6 +622,7 @@ const settings = ref({
 	allow_write_off_change: 0,
 	allow_partial_payment: 0,
 	silent_print: 0,
+	show_invoice_success_dialog: 1,
 	allow_negative_stock: 0,
 	tax_inclusive: 0,
 })
@@ -826,6 +834,10 @@ async function saveSettings() {
 			// Update original values after successful save
 			originalAllowNegativeStock.value = result.allow_negative_stock
 			originalTaxInclusive.value = result.tax_inclusive
+			// Sync show_invoice_success_dialog to posSettingsStore immediately (no page reload needed)
+			if ('show_invoice_success_dialog' in result) {
+				posSettingsStore.settings.show_invoice_success_dialog = result.show_invoice_success_dialog
+			}
 		}
 
 		// Update warehouse in POS Profile if changed

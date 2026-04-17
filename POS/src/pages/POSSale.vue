@@ -2043,11 +2043,13 @@ async function handlePaymentCompleted(paymentData) {
 			};
 
 			await offlineStore.saveInvoiceOffline(invoiceData);
-			uiStore.showSuccess(
-				`OFFLINE-${Date.now()}`,
-				cartStore.grandTotal,
-				paymentData.paid_amount
-			);
+			if (posSettingsStore.showInvoiceSuccessDialog) {
+				uiStore.showSuccess(
+					`OFFLINE-${Date.now()}`,
+					cartStore.grandTotal,
+					paymentData.paid_amount
+				);
+			}
 			uiStore.showPaymentDialog = false;
 			cartStore.clearCart();
 			// Reset cart hash after successful payment
@@ -2097,7 +2099,9 @@ async function handlePaymentCompleted(paymentData) {
 						showWarning(__("Invoice {0} created but print failed", [invoiceName]));
 					}
 				} else {
-					uiStore.showSuccess(invoiceName, invoiceTotal, paidAmount);
+					if (posSettingsStore.showInvoiceSuccessDialog) {
+						uiStore.showSuccess(invoiceName, invoiceTotal, paidAmount);
+					}
 					showSuccess(__("Invoice {0} created successfully", [invoiceName]));
 				}
 			}
