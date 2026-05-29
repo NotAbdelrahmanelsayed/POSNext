@@ -119,6 +119,14 @@ export const useBootstrapStore = defineStore("bootstrap", () => {
 	}
 
 	/**
+	 * Whether the current user can see buying price / valuation rate in the cart.
+	 * True only when the POS setting is enabled AND user has admin/manager role.
+	 */
+	function getCanSeeBuyingPrice() {
+		return data.value?.can_see_buying_price || false
+	}
+
+	/**
 	 * Get preloaded precision settings or defaults if not available
 	 * Settings from Date and Number Format section in System Settings
 	 * @returns {{ currency: number, float: number, rounding_method: string, number_format: string }}
@@ -164,6 +172,7 @@ export const useBootstrapStore = defineStore("bootstrap", () => {
 		getPreloadedPOSSettings,
 		getPreloadedPaymentMethods,
 		getPreloadedPrecision,
+		getCanSeeBuyingPrice,
 		hasBootstrapData,
 		reset,
 		getSiteName,

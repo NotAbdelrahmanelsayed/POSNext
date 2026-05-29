@@ -1833,6 +1833,11 @@ async function handleShiftOpened() {
 
 	_initializedProfile = shiftStore.profileName;
 
+	// Refresh bootstrap so can_see_buying_price reflects the now-active shift.
+	// Awaited so role-gated flags are ready before the cashier can add items.
+	bootstrapStore.reset();
+	await bootstrapStore.loadInitialData().catch(() => {});
+
 	// Start session lock tracking now that a shift is open and POS is ready
 	startActivityTracking();
 	showSuccess(__("You can now start making sales"));
@@ -2336,6 +2341,7 @@ async function handleOptionSelected(option) {
 				conversion_factor: option.conversion_factor,
 				rate: pricing.rate,
 				price_list_rate: pricing.price_list_rate,
+				valuation_rate: pricing.valuation_rate || cartStore.pendingItem.valuation_rate || 0,
 			};
 
 			if (itemToAdd.has_batch_no || itemToAdd.has_serial_no) {

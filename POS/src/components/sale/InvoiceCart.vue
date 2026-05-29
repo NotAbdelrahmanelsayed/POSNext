@@ -1092,6 +1092,36 @@
 									</div>
 								</div>
 							</div>
+
+							<!-- Stock & Cost Info Row -->
+							<div
+								v-if="item.actual_qty !== undefined || canSeeBuyingPrice"
+								class="flex items-center gap-2 w-full mt-1 pt-1 border-t border-gray-100"
+							>
+								<!-- Remaining Stock (visible to all) -->
+								<span
+									v-if="item.actual_qty !== undefined"
+									class="flex items-center gap-1 text-sm text-gray-600 font-semibold"
+									:title="__('Available stock in warehouse')"
+								>
+									<svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10" />
+									</svg>
+									{{ formatQuantity(Math.max(0, (item.actual_qty ?? 0) / (item.conversion_factor || 1) - (item.quantity ?? 0))) }}&nbsp;{{ __('left') }}
+								</span>
+
+								<!-- Buying Price (admin / manager only when setting enabled) -->
+								<span
+									v-if="canSeeBuyingPrice && item.valuation_rate"
+									class="flex items-center gap-1 text-sm text-amber-600 font-semibold ms-auto"
+									:title="__('Buying / Cost Price')"
+								>
+									<svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-5 5a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 10V5a2 2 0 012-2z" />
+									</svg>
+									{{ __('Cost') }}: {{ formatCurrency(item.valuation_rate) }}
+								</span>
+							</div>
 						</div>
 					</div>
 				</div>
@@ -1258,6 +1288,7 @@ import { usePOSCartStore } from "@/stores/posCart";
 import { usePOSSettingsStore } from "@/stores/posSettings";
 import { usePOSOffersStore } from "@/stores/posOffers";
 import { useCustomerSearchStore } from "@/stores/customerSearch";
+import { useBootstrapStore } from "@/stores/bootstrap";
 import { DEFAULT_CURRENCY, formatCurrency as formatCurrencyUtil } from "@/utils/currency";
 import { useFormatters } from "@/composables/useFormatters";
 import { useCartSort } from "@/composables/useCartSort";
@@ -1280,7 +1311,11 @@ const cartStore = usePOSCartStore(); // Pinia store for cart state management
 const settingsStore = usePOSSettingsStore(); // Pinia store for POS settings
 const offersStore = usePOSOffersStore(); // Pinia store for offers/promotions
 const customerSearchStore = useCustomerSearchStore(); // Pinia store for customer search
+const bootstrapStore = useBootstrapStore(); // Bootstrap data including role-gated flags
 const { formatQuantity } = useFormatters(); // Quantity formatting utilities
+
+// can_see_buying_price is returned by get_pos_settings (server-side role + setting check)
+const canSeeBuyingPrice = computed(() => settingsStore.canSeeBuyingPrice);
 
 function handleProceedToPayment() {
 	emit("proceed-to-payment");

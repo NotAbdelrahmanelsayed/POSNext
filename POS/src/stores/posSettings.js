@@ -35,6 +35,8 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 		display_discount_percentage: 0,
 		display_discount_amount: 0,
 		show_variants_as_items: 0,
+		show_buying_price: 0,
+		can_see_buying_price: false,
 		// Operations
 		allow_sales_order: 0,
 		allow_select_sales_order: 0,
@@ -149,6 +151,13 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 	)
 	const showVariantsAsItems = computed(() =>
 		Boolean(settings.value.show_variants_as_items),
+	)
+	const showBuyingPrice = computed(() =>
+		Boolean(settings.value.show_buying_price),
+	)
+	// Visible to all users when show_buying_price setting is enabled
+	const canSeeBuyingPrice = computed(() =>
+		Boolean(settings.value.show_buying_price),
 	)
 
 	// Computed - Operations
@@ -277,6 +286,8 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 			const preloadedSettings = bootstrapStore.getPreloadedPOSSettings()
 			if (preloadedSettings && Object.keys(preloadedSettings).length > 0) {
 				Object.assign(settings.value, preloadedSettings)
+				// can_see_buying_price lives at bootstrap top-level, not inside pos_settings
+				settings.value.can_see_buying_price = bootstrapStore.getCanSeeBuyingPrice()
 				isLoaded.value = true
 				isLoading.value = false
 				return true
@@ -324,6 +335,8 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 			display_discount_percentage: 0,
 			display_discount_amount: 0,
 			show_variants_as_items: 0,
+			show_buying_price: 0,
+			can_see_buying_price: false,
 			allow_sales_order: 0,
 			allow_select_sales_order: 0,
 			create_only_sales_order: 0,
@@ -440,6 +453,8 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 		displayDiscountPercentage,
 		displayDiscountAmount,
 		showVariantsAsItems,
+		showBuyingPrice,
+		canSeeBuyingPrice,
 
 		// Computed - Operations
 		allowSalesOrder,

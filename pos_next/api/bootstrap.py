@@ -60,12 +60,21 @@ def get_initial_data():
 	if frappe.session.user == "Guest":
 		frappe.throw(_("Authentication required"), frappe.AuthenticationError)
 
+	user_roles = frappe.get_roles()
+	is_admin = "System Manager" in user_roles or "Nexus POS Manager" in user_roles
+
+	# can_see_buying_price is visible to all users when the setting is enabled
+	can_see_buying_price = bool(
+		frappe.db.get_value("POS Settings", {"show_buying_price": 1, "enabled": 1}, "name")
+	)
+
 	result = {
 		"success": True,
 		"site_name": frappe.local.site,
 		"locale": _get_user_language(),
 		"precision": _get_precision_settings(),
-		"can_switch_to_desk": "Nexus POS Manager" in frappe.get_roles(),
+		"can_switch_to_desk": "Nexus POS Manager" in user_roles,
+		"can_see_buying_price": can_see_buying_price,
 		"shift": None,
 		"pos_profile": None,
 		"pos_settings": None,
@@ -105,6 +114,11 @@ def get_initial_data():
 
 	result["pos_settings"] = _get_pos_settings(pos_profile)
 	result["payment_methods"] = _get_payment_methods(pos_profile_name)
+
+	# Refine can_see_buying_price using the active profile's specific setting
+	result["can_see_buying_price"] = bool(
+		result["pos_settings"].get("show_buying_price", 0)
+	)
 
 	return result
 

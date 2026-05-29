@@ -41,6 +41,7 @@ POS_SETTINGS_FIELDS = [
 	"enable_session_lock",
 	"session_lock_timeout",
 	"show_variants_as_items",
+	"show_buying_price",
 ]
 
 # Default POS Settings values
@@ -72,4 +73,5 @@ DEFAULT_POS_SETTINGS = {
 	"enable_session_lock": 0,
 	"session_lock_timeout": 5,
 	"show_variants_as_items": 0,
+	"show_buying_price": 0,
 }

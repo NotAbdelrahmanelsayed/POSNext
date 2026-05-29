@@ -36,6 +36,7 @@
   "hide_expected_amount",
   "display_discount_percentage",
   "display_discount_amount",
+  "show_buying_price",
   "show_variants_as_items",
   "section_break_operations",
   "allow_sales_order",
@@ -295,6 +296,13 @@
    "fieldname": "display_discount_amount",
    "fieldtype": "Check",
    "label": "Display Discount Amount"
+  },
+  {
+   "default": "0",
+   "description": "Show item cost (valuation rate) in cart for System Managers and POS Managers only",
+   "fieldname": "show_buying_price",
+   "fieldtype": "Check",
+   "label": "Show Buying Price to Authorized Users"
   },
   {
    "default": "0",

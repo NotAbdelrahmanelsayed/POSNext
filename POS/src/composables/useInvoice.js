@@ -1,6 +1,7 @@
 import { createResource } from "frappe-ui"
 import { computed, ref, toRaw } from "vue"
 import { isOffline, getCachedItem } from "@/utils/offline"
+import { call } from "@/utils/apiWrapper"
 import { useSerialNumberStore } from "@/stores/serialNumber"
 import { CoalescingMutex } from "@/utils/mutex"
 import { logger } from "@/utils/logger"
@@ -126,6 +127,7 @@ export function useInvoice() {
 				return {
 					rate: itemDetails.price_list_rate || itemDetails.rate,
 					price_list_rate: itemDetails.price_list_rate,
+					valuation_rate: itemDetails.valuation_rate ?? 0,
 				}
 			} catch (err) {
 				log.warn("Server UOM pricing unavailable, resolving from IndexedDB", err)
@@ -293,10 +295,24 @@ export function useInvoice() {
 				is_stock_item: item.is_stock_item ?? 1,
 				is_bundle: item.is_bundle || false,
 				allow_negative_stock: item.allow_negative_stock || 0,
+				valuation_rate: item.valuation_rate ?? 0,
 			}
 			invoiceItems.value.push(newItem)
 			// Recalculate the newly added item to apply taxes
 			recalculateItem(newItem)
+
+			// Background: if valuation_rate unknown, fetch it from server and update reactively
+			if (!newItem.valuation_rate && !isOffline() && newItem.is_stock_item) {
+				// Get the reactive proxy reference (not the original object) so Vue tracks the update
+				const cartItem = invoiceItems.value[invoiceItems.value.length - 1]
+				call("pos_next.api.items.get_item_details", {
+					item_code: newItem.item_code,
+					pos_profile: posProfile.value,
+				}).then((r) => {
+					const vr = r?.valuation_rate ?? r?.message?.valuation_rate
+					if (vr) cartItem.valuation_rate = vr
+				}).catch(() => {})
+			}
 
 			// Update cache incrementally (add new item values)
 			// Use rounded price_list_rate for subtotal to match ERPNext

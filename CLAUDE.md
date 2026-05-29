@@ -27,6 +27,12 @@ bench --site <site> clear-cache      # After Python changes
 bench build --app pos_next           # Rebuild assets via bench (alternative to npm)
 ```
 
+> **Gunicorn `--preload` warning**: The server runs with `--preload`, so Python workers fork from a preloaded master. After any Python file change, the old code stays in memory until workers are reloaded:
+> ```bash
+> kill -HUP $(pgrep -f "gunicorn.*frappe" | head -1)   # graceful reload
+> ```
+> `bench clear-cache` alone is NOT sufficient — it clears Redis but not in-process memory.
+
 ---
 
 ## Architecture
@@ -107,3 +113,67 @@ Real-time updates use Socket.IO via the `posEvents` Pinia store (lazy connection
 - **Credit sale** (`is_credit_sale: true`): sends `payments: []` to backend. ERPNext requires at least one payment mode — only works if the site has credit sale support configured.
 - **Exact amount mode**: when active for non-cash methods, only the exact invoice total is accepted.
 - **Wallet payments**: handled by `CustomSalesInvoice` override which posts correct GL entries to Receivable accounts (not the wallet account directly).
+
+---
+
+## Feature: Show Buying Price & Remaining Stock in Cart
+
+Each cart item row in `InvoiceCart.vue` shows two extra data points below the item line:
+
+| Element | Visible to | Condition |
+|---|---|---|
+| `N left` (stock remaining) | Everyone | `item.actual_qty !== undefined` |
+| `Cost: E£ X.XX` (buying price) | Everyone when setting ON | `posSettings.show_buying_price = 1` AND `item.valuation_rate > 0` |
+
+### How `show_buying_price` works
+
+Enabled via **POS Settings → Show Buying Price to Authorized Users** toggle. When ON, all cashiers see the cost. The toggle lives in `POS Settings` doctype (`show_buying_price` Check field).
+
+- `posSettings.canSeeBuyingPrice` computed = `Boolean(settings.value.show_buying_price)` — no role gate, purely the setting.
+- Previously this was role-gated (`System Manager` / `Nexus POS Manager`) but was removed because the setting itself acts as the gate.
+
+### How `valuation_rate` is sourced (priority order)
+
+`Item.valuation_rate` is 0 for most items. The actual cost is in the `Item Price` or `Bin` table. Priority:
+
+1. **`Item Price`** where `buying = 1` (Standard Buying price list)
+2. **`Bin.valuation_rate`** for the item's warehouse (moving average / FIFO cost)
+3. **`Item.valuation_rate`** (rarely populated, only for Standard valuation method)
+
+This logic runs in two places:
+- `get_items()` in `pos_next/api/items.py` — batch query builds `buying_price_map` and `valuation_rate_map` for search results
+- `get_item_detail()` in `pos_next/api/items.py` — single-item lookup used by `get_item_details` endpoint
+
+### Why items may briefly show no cost (cache-first search)
+
+Item searches use a **cache-first** strategy (IndexedDB → server). If the user clicks an item before the server results arrive, the cached item may have `valuation_rate = 0` (old cache). To handle this:
+
+`useInvoice.addItem()` detects `valuation_rate = 0` on a newly added stock item and fires a background call to `pos_next.api.items.get_item_details`. When the response arrives, it sets `cartItem.valuation_rate` on the **reactive proxy** (not the original plain object) to trigger re-render.
+
+### Remaining stock formula
+
+```js
+Math.max(0, (item.actual_qty ?? 0) / (item.conversion_factor || 1) - (item.quantity ?? 0))
+```
+
+`actual_qty` = warehouse stock in **stock UOM**. `conversion_factor` = stock units per 1 cart UOM unit. `quantity` = qty in cart (cart UOM). Dividing `actual_qty` by `conversion_factor` converts it to cart UOM before subtracting. Note: `item.quantity` (not `item.qty`) is the Pinia cart field name.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `pos_next/pos_next/doctype/pos_settings/pos_settings.json` | Added `show_buying_price` Check field |
+| `pos_next/api/constants.py` | Added `show_buying_price` to `POS_SETTINGS_FIELDS` and `DEFAULT_POS_SETTINGS` |
+| `pos_next/api/bootstrap.py` | `can_see_buying_price` top-level flag (no role gate now) |
+| `pos_next/pos_next/doctype/pos_settings/pos_settings.py` | `get_pos_settings()` injects `can_see_buying_price`; buying price priority logic |
+| `pos_next/api/items.py` | `get_items()` builds `buying_price_map` + `valuation_rate_map` from Bin; `get_item_detail()` has Item Price → Bin → Item fallback |
+| `POS/src/stores/bootstrap.js` | `getCanSeeBuyingPrice()` helper reads top-level `can_see_buying_price` |
+| `POS/src/stores/posSettings.js` | `canSeeBuyingPrice` computed reads `show_buying_price` directly; bootstrap optimization fix copies `can_see_buying_price` |
+| `POS/src/components/settings/POSSettings.vue` | Checkbox for `show_buying_price` in Display Settings |
+| `POS/src/components/sale/InvoiceCart.vue` | Stock & Cost info row rendered under each cart item |
+| `POS/src/composables/useInvoice.js` | `resolveUomPricing` returns `valuation_rate`; background fetch on `valuation_rate=0` |
+| `POS/src/pages/POSSale.vue` | UOM `itemToAdd` spreads `valuation_rate` from pricing response |
+
+### Service worker & deployment note
+
+The POS is a PWA. After `npm run build`, the new `sw.js` has `skipWaiting()` + `clientsClaim()` so it activates immediately on next page load. Users on an old cached version need `Ctrl+Shift+R` (hard refresh) to bypass the service worker and load new JS.

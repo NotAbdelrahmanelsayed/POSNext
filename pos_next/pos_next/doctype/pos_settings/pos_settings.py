@@ -122,6 +122,9 @@ def get_pos_settings(pos_profile):
 		frappe.db.get_single_value("Stock Settings", "allow_negative_stock") or 0
 	)
 
+	# Visible to all users when the setting is enabled
+	settings["can_see_buying_price"] = bool(settings.get("show_buying_price", 0))
+
 	return settings
 
 

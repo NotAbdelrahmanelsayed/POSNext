@@ -547,6 +547,23 @@
 										</div>
 									</div>
 								</div>
+
+								<!-- Display Preferences -->
+								<div :class="displaySubsectionClasses.container">
+									<div class="flex items-center gap-2 mb-4">
+										<svg :class="displaySubsectionClasses.icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+										</svg>
+										<h4 class="text-sm font-semibold text-gray-900">{{ __('Display Preferences') }}</h4>
+									</div>
+									<div class="flex flex-col gap-3">
+										<CheckboxField
+											v-model="settings.show_buying_price"
+											:label="__('Show Buying Price to Authorized Users')"
+											:description="__('Displays item cost (valuation rate) in the cart. Only visible to System Managers and POS Managers.')"
+										/>
+									</div>
+								</div>
 							</div>
 
 						</div>
@@ -625,6 +642,7 @@ const settings = ref({
 	show_invoice_success_dialog: 1,
 	allow_negative_stock: 0,
 	tax_inclusive: 0,
+	show_buying_price: 0,
 })
 
 // Stock Sync Settings (localStorage persisted)
@@ -675,6 +693,7 @@ const stockPolicySubsectionClasses = computed(() =>
 const stockSyncSubsectionClasses = computed(() => getSubsectionClasses("indigo"))
 const pricingSubsectionClasses = computed(() => getSubsectionClasses("emerald"))
 const operationsSubsectionClasses = computed(() => getSubsectionClasses("teal"))
+const displaySubsectionClasses = computed(() => getSubsectionClasses("amber"))
 
 // Resources
 const warehousesResource = createResource({
