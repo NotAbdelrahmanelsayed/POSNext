@@ -500,8 +500,11 @@
 			:discount-amount="cartStore.totalDiscount"
 			:target-doctype="cartStore.targetDoctype"
 			:is-submitting="cartStore.isSubmitting"
+			:applied-offer-count="cartStore.appliedOffers.length"
 			@payment-completed="handlePaymentCompleted"
 			@update-additional-discount="handleAdditionalDiscountUpdate"
+			@show-offers="uiStore.showOffersDialog = true"
+			@show-coupon="uiStore.showCouponDialog = true"
 		/>
 
 			<!-- Customer Selection Dialog -->
@@ -2114,6 +2117,7 @@ async function handlePaymentCompleted(paymentData) {
 				total_discount: cartStore.totalDiscount,
 				write_off_amount: paymentData.write_off_amount || 0,
 				change_amount: paymentData.change_amount || 0,
+				is_credit_sale: paymentData.is_credit_sale ? 1 : 0,
 				edited_from: editingOfflineContext?.originalOfflineId || null,
 			};
 
@@ -2208,7 +2212,9 @@ async function handlePaymentCompleted(paymentData) {
 			// Get item codes from cart before clearing
 			const soldItemCodes = cartStore.invoiceItems.map((item) => item.item_code);
 
-			const result = await cartStore.submitInvoice();
+			const result = await cartStore.submitInvoice({
+				isCreditSale: Boolean(paymentData.is_credit_sale),
+			});
 
 			if (result) {
 				uiStore.clearLastOfflinePrintDoc();

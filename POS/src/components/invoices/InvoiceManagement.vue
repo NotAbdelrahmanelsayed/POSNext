@@ -377,6 +377,10 @@
 													<div class="text-xs text-gray-500 mb-1">{{ __('Outstanding') }}</div>
 													<div class="text-sm font-semibold text-orange-600">{{ formatCurrency(invoice.outstanding_amount || 0) }}</div>
 												</div>
+												<div class="col-span-2">
+													<div class="text-xs text-gray-500 mb-1">{{ __('Payment Mode') }}</div>
+													<div class="text-sm font-semibold text-gray-900">{{ formatPaymentModes(invoice) }}</div>
+												</div>
 											</div>
 										</div>
 
@@ -986,6 +990,26 @@ async function handlePaymentCompleted(paymentData) {
 
 function formatCurrency(amount) {
 	return formatCurrencyUtil(Number.parseFloat(amount || 0), props.currency)
+}
+
+function formatPaymentModes(invoice) {
+	const payments = Array.isArray(invoice?.payments) ? invoice.payments : []
+	const validPayments = payments.filter((payment) => payment.mode_of_payment)
+
+	if (validPayments.length === 0) {
+		return __("No payment mode")
+	}
+
+	if (validPayments.length === 1) {
+		return __(validPayments[0].mode_of_payment)
+	}
+
+	return validPayments
+		.map(
+			(payment) =>
+				`${__(payment.mode_of_payment)} ${formatCurrency(payment.amount || 0)}`,
+		)
+		.join(", ")
 }
 
 function getPaymentSourceLabel(source) {

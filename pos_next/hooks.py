@@ -79,10 +79,11 @@ _asset_version = get_build_version()
 # ----------
 
 # add methods and filters to jinja environment
-# jinja = {
-# 	"methods": "pos_next.utils.jinja_methods",
-# 	"filters": "pos_next.utils.jinja_filters"
-# }
+jinja = {
+	"methods": [
+		"pos_next.pos_next.utils.pos_closing_print.get_items_sold",
+	]
+}
 
 # Fixtures
 # --------
@@ -136,25 +137,6 @@ before_uninstall = "pos_next.uninstall.before_uninstall"
 
 # notification_config = "pos_next.notifications.get_notification_config"
 
-# Permissions
-# -----------
-# Permissions evaluated in scripted ways
-
-# permission_query_conditions = {
-# 	"Event": "frappe.desk.doctype.event.event.get_permission_query_conditions",
-# }
-#
-# has_permission = {
-# 	"Event": "frappe.desk.doctype.event.event.has_permission",
-# }
-
-# Standard Queries
-# ----------------
-# Custom query for company-aware item filtering
-standard_queries = {
-	"Item": "pos_next.validations.item_query"
-}
-
 # DocType Class
 # ---------------
 # Override standard doctype classes
@@ -168,9 +150,6 @@ override_doctype_class = {
 # Hook on document methods and events
 
 doc_events = {
-	"Item": {
-		"validate": "pos_next.validations.validate_item"
-	},
 	"Customer": {
 		"after_insert": [
 			"pos_next.api.customers.auto_assign_loyalty_program",
