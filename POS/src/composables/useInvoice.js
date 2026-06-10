@@ -130,7 +130,10 @@ export function useInvoice() {
 					valuation_rate: itemDetails.valuation_rate ?? 0,
 				}
 			} catch (err) {
-				log.warn("Server UOM pricing unavailable, resolving from IndexedDB", err)
+				log.warn(
+					"Server UOM pricing unavailable, resolving from IndexedDB",
+					err,
+				)
 			}
 		}
 
@@ -308,10 +311,12 @@ export function useInvoice() {
 				call("pos_next.api.items.get_item_details", {
 					item_code: newItem.item_code,
 					pos_profile: posProfile.value,
-				}).then((r) => {
-					const vr = r?.valuation_rate ?? r?.message?.valuation_rate
-					if (vr) cartItem.valuation_rate = vr
-				}).catch(() => {})
+				})
+					.then((r) => {
+						const vr = r?.valuation_rate ?? r?.message?.valuation_rate
+						if (vr) cartItem.valuation_rate = vr
+					})
+					.catch(() => {})
 			}
 
 			// Update cache incrementally (add new item values)
@@ -346,7 +351,9 @@ export function useInvoice() {
 			// Update cache incrementally (subtract removed item values)
 			// Use effective rate (manually edited rate or price_list_rate)
 			const isManuallyEdited = itemToRemove.is_rate_manually_edited === 1
-			const effectiveRate = isManuallyEdited ? itemToRemove.rate : (itemToRemove.price_list_rate || itemToRemove.rate)
+			const effectiveRate = isManuallyEdited
+				? itemToRemove.rate
+				: itemToRemove.price_list_rate || itemToRemove.rate
 			_cachedSubtotal.value -= roundCurrency(
 				itemToRemove.quantity * roundCurrency(effectiveRate),
 			)
@@ -392,7 +399,9 @@ export function useInvoice() {
 			// Store old values before update for incremental cache adjustment
 			// Use effective rate (manually edited rate or price_list_rate)
 			const isManuallyEdited = item.is_rate_manually_edited === 1
-			const effectiveRate = isManuallyEdited ? item.rate : (item.price_list_rate || item.rate)
+			const effectiveRate = isManuallyEdited
+				? item.rate
+				: item.price_list_rate || item.rate
 			const oldAmount = roundCurrency(
 				item.quantity * roundCurrency(effectiveRate),
 			)
@@ -438,7 +447,9 @@ export function useInvoice() {
 			// Store old values before update for incremental cache adjustment
 			// Use effective rate (manually edited rate or price_list_rate)
 			const wasManuallyEdited = item.is_rate_manually_edited === 1
-			const oldEffectiveRate = wasManuallyEdited ? item.rate : (item.price_list_rate || item.rate)
+			const oldEffectiveRate = wasManuallyEdited
+				? item.rate
+				: item.price_list_rate || item.rate
 			const oldAmount = roundCurrency(
 				item.quantity * roundCurrency(oldEffectiveRate),
 			)
@@ -464,9 +475,12 @@ export function useInvoice() {
 			// Update cache incrementally (new values - old values)
 			// Use the new rate for manually edited items
 			const isNowManuallyEdited = item.is_rate_manually_edited === 1
-			const newEffectiveRate = isNowManuallyEdited ? item.rate : (item.price_list_rate || item.rate)
+			const newEffectiveRate = isNowManuallyEdited
+				? item.rate
+				: item.price_list_rate || item.rate
 			_cachedSubtotal.value +=
-				roundCurrency(item.quantity * roundCurrency(newEffectiveRate)) - oldAmount
+				roundCurrency(item.quantity * roundCurrency(newEffectiveRate)) -
+				oldAmount
 			_cachedTotalTax.value += (item.tax_amount || 0) - oldTax
 			_cachedTotalDiscount.value += (item.discount_amount || 0) - oldDiscount
 		}
@@ -483,7 +497,9 @@ export function useInvoice() {
 			// Store old values before update for incremental cache adjustment
 			// Use effective rate (manually edited rate or price_list_rate)
 			const isManuallyEdited = item.is_rate_manually_edited === 1
-			const effectiveRate = isManuallyEdited ? item.rate : (item.price_list_rate || item.rate)
+			const effectiveRate = isManuallyEdited
+				? item.rate
+				: item.price_list_rate || item.rate
 			const oldAmount = roundCurrency(
 				item.quantity * roundCurrency(effectiveRate),
 			)
@@ -635,7 +651,9 @@ export function useInvoice() {
 		for (const item of invoiceItems.value) {
 			// Use manually edited rate if set, otherwise use price_list_rate
 			const isManuallyEdited = item.is_rate_manually_edited === 1
-			const effectiveRate = isManuallyEdited ? item.rate : (item.price_list_rate || item.rate)
+			const effectiveRate = isManuallyEdited
+				? item.rate
+				: item.price_list_rate || item.rate
 			_cachedSubtotal.value += roundCurrency(
 				item.quantity * roundCurrency(effectiveRate),
 			)
@@ -678,7 +696,9 @@ export function useInvoice() {
 		// Determine the base unit price
 		// If rate was manually edited, use the edited rate; otherwise use price_list_rate
 		const isManuallyEdited = item.is_rate_manually_edited === 1
-		const effectiveRate = isManuallyEdited ? item.rate : (item.price_list_rate || item.rate)
+		const effectiveRate = isManuallyEdited
+			? item.rate
+			: item.price_list_rate || item.rate
 		const roundedRate = roundCurrency(effectiveRate)
 		const baseAmount = roundCurrency(item.quantity * roundedRate)
 
@@ -764,7 +784,9 @@ export function useInvoice() {
 			item_name: item.item_name,
 			qty: item.quantity || item.qty || 1,
 			rate: item.is_free_item ? 0 : computeBackendRate(item),
-			price_list_rate: item.is_free_item ? 0 : roundCurrency(item.price_list_rate || item.rate),
+			price_list_rate: item.is_free_item
+				? 0
+				: roundCurrency(item.price_list_rate || item.rate),
 			uom: item.uom,
 			warehouse: item.warehouse,
 			batch_no: item.batch_no,
@@ -852,7 +874,9 @@ export function useInvoice() {
 	}
 
 	function buildCustomerCreditPayload(rawPayments) {
-		const creditPayments = rawPayments.filter((payment) => payment?.is_customer_credit)
+		const creditPayments = rawPayments.filter(
+			(payment) => payment?.is_customer_credit,
+		)
 
 		if (!creditPayments.length) {
 			return {
@@ -874,7 +898,10 @@ export function useInvoice() {
 		}
 
 		const redeemedCustomerCredit = roundCurrency(
-			creditPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0),
+			creditPayments.reduce(
+				(sum, payment) => sum + Number(payment.amount || 0),
+				0,
+			),
 		)
 
 		let remainingCreditToAllocate = redeemedCustomerCredit
@@ -888,7 +915,10 @@ export function useInvoice() {
 			)
 			if (availableCredit <= 0) continue
 
-			const creditToRedeem = Math.min(availableCredit, remainingCreditToAllocate)
+			const creditToRedeem = Math.min(
+				availableCredit,
+				remainingCreditToAllocate,
+			)
 			if (creditToRedeem <= 0) continue
 
 			customerCreditDict.push({
@@ -948,6 +978,7 @@ export function useInvoice() {
 		targetDoctype = "Sales Invoice",
 		deliveryDate = null,
 		writeOffAmount = 0,
+		isCreditSale = false,
 	) {
 		/**
 		 * Two-step submission process with mutex protection:
@@ -980,11 +1011,8 @@ export function useInvoice() {
 				const rawItems = toRaw(invoiceItems.value)
 				const rawPayments = toRaw(payments.value)
 				const rawSalesTeam = toRaw(salesTeam.value)
-				const {
-					invoicePayments,
-					redeemedCustomerCredit,
-					customerCreditDict,
-				} = buildCustomerCreditPayload(rawPayments)
+				const { invoicePayments, redeemedCustomerCredit, customerCreditDict } =
+					buildCustomerCreditPayload(rawPayments)
 
 				const invoiceData = {
 					doctype: targetDoctype,
@@ -1034,6 +1062,7 @@ export function useInvoice() {
 					change_amount:
 						remainingAmount.value < 0 ? Math.abs(remainingAmount.value) : 0,
 					write_off_amount: writeOffAmount || 0,
+					is_credit_sale: isCreditSale || false,
 				}
 
 				if (redeemedCustomerCredit > 0 && customerCreditDict.length > 0) {

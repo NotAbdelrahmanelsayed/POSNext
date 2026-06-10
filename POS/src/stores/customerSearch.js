@@ -75,17 +75,15 @@ export const useCustomerSearchStore = defineStore("customerSearch", () => {
 	const filteredCustomers = computed(() => {
 		const term = searchTerm.value.trim()
 
-		// Show recent/frequent customers when no search term (CACHED)
+		// Show recent/frequent customers first when no search term (CACHED)
 		if (!term) {
 			const cacheKey = "empty"
 			let cached = resultCache.value.get(cacheKey)
 
 			if (!cached) {
-				// Build index maps once for O(1) lookup
 				const recentSet = new Set(recentSearches.value)
 				const frequentSet = new Set(frequentCustomers.value)
 
-				// Separate into buckets
 				const recent = []
 				const frequent = []
 				const other = []
@@ -96,7 +94,7 @@ export const useCustomerSearchStore = defineStore("customerSearch", () => {
 					else other.push(c)
 				}
 
-				cached = [...recent, ...frequent, ...other].slice(0, 50)
+				cached = [...recent, ...frequent, ...other]
 				resultCache.value.set(cacheKey, cached)
 			}
 
@@ -110,37 +108,15 @@ export const useCustomerSearchStore = defineStore("customerSearch", () => {
 			return cachedResult
 		}
 
-		// Ultra-fast search with early exit
+		// Single pass: collect ALL matching customers, sort by score
 		const results = []
-		const maxResults = 50
-		let scanned = 0
-
-		// First pass: Get exact and high-scoring matches ONLY
 		for (const cust of allCustomers.value) {
-			scanned++
 			const score = quickMatch(term, cust)
-
-			if (score >= 240) {
-				// High priority matches
+			if (score > 0) {
 				results.push({ customer: cust, score })
-				if (results.length >= maxResults) break // Exit immediately when we have enough
 			}
 		}
 
-		// Second pass: Fill remaining slots with lower scores if needed
-		if (results.length < maxResults && scanned < allCustomers.value.length) {
-			for (let i = scanned; i < allCustomers.value.length; i++) {
-				const cust = allCustomers.value[i]
-				const score = quickMatch(term, cust)
-
-				if (score > 0 && score < 240) {
-					results.push({ customer: cust, score })
-					if (results.length >= maxResults) break
-				}
-			}
-		}
-
-		// Sort ONLY what we found (much faster than sorting everything)
 		results.sort((a, b) => b.score - a.score)
 		const final = results.map((r) => r.customer)
 
@@ -167,7 +143,7 @@ export const useCustomerSearchStore = defineStore("customerSearch", () => {
 		if (/^\d+$/.test(term)) {
 			recs.push({
 				type: "phone",
-				text: __('Search by phone: {0}', [term]),
+				text: __("Search by phone: {0}", [term]),
 				icon: "📱",
 			})
 		}
@@ -176,7 +152,7 @@ export const useCustomerSearchStore = defineStore("customerSearch", () => {
 		if (term.includes("@")) {
 			recs.push({
 				type: "email",
-				text: __('Search by email: {0}', [term]),
+				text: __("Search by email: {0}", [term]),
 				icon: "✉️",
 			})
 		}
@@ -188,7 +164,7 @@ export const useCustomerSearchStore = defineStore("customerSearch", () => {
 		if (!exactMatch && filteredCustomers.value.length < 5) {
 			recs.push({
 				type: "create",
-				text: __('Create new customer: {0}', [term]),
+				text: __("Create new customer: {0}", [term]),
 				icon: "➕",
 			})
 		}
@@ -210,10 +186,7 @@ export const useCustomerSearchStore = defineStore("customerSearch", () => {
 		loading.value = true
 		try {
 			// Step 1: Load from IndexedDB cache (instant display)
-			const cachedCustomers = await offlineWorker.searchCachedCustomers(
-				"",
-				0,
-			)
+			const cachedCustomers = await offlineWorker.searchCachedCustomers("", 0)
 
 			if (cachedCustomers && cachedCustomers.length > 0) {
 				allCustomers.value = cachedCustomers
@@ -222,7 +195,17 @@ export const useCustomerSearchStore = defineStore("customerSearch", () => {
 
 			// Step 2: If online, fetch delta from server
 			if (!isOffline()) {
-				const lastSync = forceReload ? null : localStorage.getItem(CUSTOMERS_SYNC_KEY)
+				// If cache is empty but we have a stored sync timestamp, the delta won't
+				// recover old customers (they won't appear as "modified since" last sync).
+				// Force a full reload in that case so nothing is silently missing.
+				const cacheEmpty = allCustomers.value.length === 0
+				const storedSync = localStorage.getItem(CUSTOMERS_SYNC_KEY)
+				if (cacheEmpty && storedSync) {
+					localStorage.removeItem(CUSTOMERS_SYNC_KEY)
+				}
+				const lastSync = forceReload
+					? null
+					: localStorage.getItem(CUSTOMERS_SYNC_KEY)
 
 				const response = await call("pos_next.api.customers.get_customers", {
 					pos_profile: posProfile,
@@ -238,7 +221,9 @@ export const useCustomerSearchStore = defineStore("customerSearch", () => {
 					const disabled = delta.filter((c) => c.disabled)
 
 					// Merge active customers into memory
-					const existingMap = new Map(allCustomers.value.map((c) => [c.name, c]))
+					const existingMap = new Map(
+						allCustomers.value.map((c) => [c.name, c]),
+					)
 					for (const c of active) {
 						existingMap.set(c.name, c)
 					}
@@ -257,7 +242,9 @@ export const useCustomerSearchStore = defineStore("customerSearch", () => {
 						await offlineWorker.deleteCustomers(disabled.map((c) => c.name))
 					}
 
-					log.debug(`Synced ${active.length} active, removed ${disabled.length} disabled customers`)
+					log.debug(
+						`Synced ${active.length} active, removed ${disabled.length} disabled customers`,
+					)
 				}
 
 				serverDataFresh = true

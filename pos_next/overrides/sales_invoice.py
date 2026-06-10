@@ -131,15 +131,18 @@ class CustomSalesInvoice(SalesInvoice):
 
 	def validate_pos_paid_amount(self):
 		"""
-		Allow pure customer-credit POS sales to submit without a payment row.
+		Allow credit sales (بالأجل) and pure customer-credit POS sales to submit
+		without a payment row.
 
-		POSNext redeems customer credit after submit through Journal Entries /
-		Payment Entry allocation, so there is no real Mode of Payment row to send.
-		Only bypass the core POS payment-row check when submit_invoice has explicitly
-		marked the document for customer-credit redemption.
+		Credit sales leave the invoice with an outstanding amount; customer-credit
+		redemptions settle the amount via Journal Entries after submit.  Both are
+		flagged by submit_invoice before this validation runs.
 		"""
-		if getattr(self.flags, "pos_next_redeemed_customer_credit", 0):
-			if len(self.payments) == 0 and cint(self.is_pos) and flt(self.grand_total) > 0:
+		if len(self.payments) == 0 and cint(self.is_pos) and flt(self.grand_total) > 0:
+			if (
+				getattr(self.flags, "pos_next_redeemed_customer_credit", 0)
+				or getattr(self.flags, "pos_next_is_credit_sale", False)
+			):
 				return
 
 		super().validate_pos_paid_amount()

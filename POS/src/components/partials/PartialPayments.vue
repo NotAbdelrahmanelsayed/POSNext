@@ -207,12 +207,16 @@
 </template>
 
 <script setup>
-import { DEFAULT_CURRENCY, formatCurrency as formatCurrencyUtil } from "@/utils/currency"
+import {
+	DEFAULT_CURRENCY,
+	formatCurrency as formatCurrencyUtil,
+} from "@/utils/currency"
 import { getInvoiceStatusColor } from "@/utils/invoice"
 import PaymentDialog from "@/components/sale/PaymentDialog.vue"
 import { usePOSSettingsStore } from "@/stores/posSettings"
 import { useToast } from "@/composables/useToast"
 import { useFormatters } from "@/composables/useFormatters"
+import { useShift } from "@/composables/useShift"
 import { Button, call } from "frappe-ui"
 import { onMounted, ref, watch } from "vue"
 
@@ -231,6 +235,7 @@ const props = defineProps({
 
 const emit = defineEmits(["update:modelValue"])
 
+const { currentShift } = useShift()
 const show = ref(props.modelValue)
 const loading = ref(false)
 const invoices = ref([])
@@ -269,10 +274,13 @@ async function loadInvoices() {
 	loading.value = true
 
 	try {
-		const result = await call("pos_next.api.partial_payments.get_partial_paid_invoices", {
-			pos_profile: props.posProfile,
-			limit: 50,
-		})
+		const result = await call(
+			"pos_next.api.partial_payments.get_partial_paid_invoices",
+			{
+				pos_profile: props.posProfile,
+				limit: 50,
+			},
+		)
 
 		invoices.value = result || []
 	} catch (error) {
@@ -287,9 +295,12 @@ async function loadSummary() {
 	if (!props.posProfile) return
 
 	try {
-		const result = await call("pos_next.api.partial_payments.get_partial_payment_summary", {
-			pos_profile: props.posProfile,
-		})
+		const result = await call(
+			"pos_next.api.partial_payments.get_partial_payment_summary",
+			{
+				pos_profile: props.posProfile,
+			},
+		)
 
 		summary.value = result || { count: 0, total_outstanding: 0, total_paid: 0 }
 	} catch (error) {
@@ -298,39 +309,43 @@ async function loadSummary() {
 }
 
 function selectInvoice(invoice) {
-	console.log('[PartialPayments] Select invoice:', {
+	console.log("[PartialPayments] Select invoice:", {
 		invoice: invoice.name,
 		allowPartialPayment: posSettingsStore.allowPartialPayment,
-		posSettings: posSettingsStore.settings
+		posSettings: posSettingsStore.settings,
 	})
 	selectedInvoice.value = invoice
 	showPaymentDialog.value = true
 }
 
 async function handlePaymentCompleted(paymentData) {
-	console.log('[PartialPayments] Payment completed:', {
+	console.log("[PartialPayments] Payment completed:", {
 		selectedInvoice: selectedInvoice.value?.name,
-		paymentData: paymentData
+		paymentData: paymentData,
 	})
 
 	if (!selectedInvoice.value) {
-		console.warn('[PartialPayments] No invoice selected')
+		console.warn("[PartialPayments] No invoice selected")
 		return
 	}
 
 	try {
-		console.log('[PartialPayments] Calling API to add payment...')
-		const result = await call("pos_next.api.partial_payments.add_payment_to_partial_invoice", {
-			invoice_name: selectedInvoice.value.name,
-			payments: paymentData.payments,
-		})
+		console.log("[PartialPayments] Calling API to add payment...")
+		const result = await call(
+			"pos_next.api.partial_payments.add_payment_to_partial_invoice",
+			{
+				invoice_name: selectedInvoice.value.name,
+				payments: paymentData.payments,
+				pos_opening_shift: currentShift.value?.name,
+			},
+		)
 
-		console.log('[PartialPayments] API response:', result)
+		console.log("[PartialPayments] API response:", result)
 
 		showSuccess(__("Payment added successfully"))
 
 		// Reload invoices and summary
-		console.log('[PartialPayments] Reloading invoices and summary...')
+		console.log("[PartialPayments] Reloading invoices and summary...")
 		await loadInvoices()
 		await loadSummary()
 
@@ -348,17 +363,16 @@ function formatCurrency(amount) {
 function getPaymentSourceLabel(source) {
 	// Convert source to user-friendly label
 	switch (source) {
-		case 'POS':
-			return 'POS'
-		case 'POS Payment Entry':
-			return 'POS'
-		case 'Payment Entry':
-			return 'Back Office'
+		case "POS":
+			return "POS"
+		case "POS Payment Entry":
+			return "POS"
+		case "Payment Entry":
+			return "Back Office"
 		default:
 			return source
 	}
 }
-
 
 // Lifecycle
 onMounted(() => {

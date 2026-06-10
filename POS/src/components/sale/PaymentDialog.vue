@@ -548,7 +548,7 @@
 						</div>
 						<div v-else-if="filteredPaymentMethods.length > 0" :class="['flex flex-wrap', isSmallMobile ? 'gap-1' : 'gap-1.5 lg:gap-2']">
 							<button
-								v-for="method in filteredPaymentMethods"
+								v-for="(method, index) in filteredPaymentMethods"
 								:key="method.mode_of_payment"
 								@pointerdown="onPaymentMethodDown(method, $event)"
 								@pointerup="onPaymentMethodUp(method)"
@@ -571,6 +571,13 @@
 							>
 								<span :class="isSmallMobile ? 'text-xs' : 'text-sm lg:text-lg'">{{ isWalletPaymentMethod(method.mode_of_payment) ? '🎁' : getPaymentIcon(method.type) }}</span>
 								<span class="truncate max-w-[80px] lg:max-w-none">{{ __(method.mode_of_payment) }}</span>
+								<kbd
+									v-if="index < 9"
+									:class="[
+										'font-mono leading-none rounded border select-none opacity-60',
+										isSmallMobile ? 'text-[7px] px-0.5 py-px border-current' : 'text-[9px] px-1 py-px border-current'
+									]"
+								>Alt+{{ index + 1 }}</kbd>
 								<!-- Wallet Balance Badge -->
 								<span v-if="isWalletPaymentMethod(method.mode_of_payment) && walletInfo.wallet_enabled"
 									:class="['font-bold rounded', isSmallMobile ? 'text-[8px] px-1 py-0.5' : 'text-[10px] px-1.5 py-0.5', availableWalletBalance > 0 ? 'text-amber-700 bg-amber-100' : 'text-gray-500 bg-gray-200']">
@@ -1026,7 +1033,7 @@ import { getPaymentIcon } from "@/utils/payment"
 import { offlineWorker } from "@/utils/offline/workerClient"
 import { logger } from "@/utils/logger"
 import { Dialog, createResource, call } from "frappe-ui"
-import { computed, ref, watch, nextTick } from "vue"
+import { computed, ref, watch, nextTick, onMounted, onUnmounted } from "vue"
 import { useToast } from "@/composables/useToast"
 import { useLongPress } from "@/composables/useLongPress"
 import { usePaymentNumpad } from "@/composables/usePaymentNumpad"
@@ -1197,7 +1204,11 @@ function handleNumpadEnter(value) {
 	if (value > 0 && lastSelectedMethod.value) {
 		numpadAddPayment()
 		nextTick(() => {
-			if (remainingAmount.value === 0 && totalPaid.value > 0 && canComplete.value) {
+			if (
+				remainingAmount.value === 0 &&
+				totalPaid.value > 0 &&
+				canComplete.value
+			) {
 				completePayment()
 			}
 		})
@@ -1209,6 +1220,33 @@ function handleNumpadEnter(value) {
 		completePayment()
 	}
 }
+
+function handlePaymentMethodShortcut(event) {
+	if (!props.modelValue) return
+	if (!event.altKey) return
+	const digit = Number.parseInt(event.key, 10)
+	if (Number.isNaN(digit) || digit < 1 || digit > 9) return
+	if (remainingAmount.value <= 0) return
+
+	const method = filteredPaymentMethods.value[digit - 1]
+	if (!method) return
+
+	if (
+		isWalletPaymentMethod(method.mode_of_payment) &&
+		availableWalletBalance.value <= 0 &&
+		getMethodTotal(method.mode_of_payment) === 0
+	)
+		return
+
+	event.preventDefault()
+	lastSelectedMethod.value = method
+	addCustomPayment(method, remainingAmount.value)
+}
+
+onMounted(() => window.addEventListener("keydown", handlePaymentMethodShortcut))
+onUnmounted(() =>
+	window.removeEventListener("keydown", handlePaymentMethodShortcut),
+)
 
 // Use numpad composable for keypad input handling with keyboard support
 const {
@@ -1622,7 +1660,11 @@ async function refreshSalesPersons() {
 function onSalesPersonFocus() {
 	salesPersonDropdownOpen.value = true
 	// If list is empty and not loading, re-fetch as a safety net
-	if (salesPersons.value.length === 0 && !loadingSalesPersons.value && props.posProfile) {
+	if (
+		salesPersons.value.length === 0 &&
+		!loadingSalesPersons.value &&
+		props.posProfile
+	) {
 		refreshSalesPersons()
 	}
 }
@@ -1988,7 +2030,11 @@ watch(
 		loadPaymentMethods()
 
 		// Fetch sales persons only when: feature is enabled, not already loaded, and not in-flight
-		if (salesPersonsEnabled && salesPersons.value.length === 0 && !loadingSalesPersons.value) {
+		if (
+			salesPersonsEnabled &&
+			salesPersons.value.length === 0 &&
+			!loadingSalesPersons.value
+		) {
 			refreshSalesPersons()
 		}
 	},
@@ -1998,7 +2044,12 @@ watch(
 // Pre-fetch customer balance when customer changes (before dialog opens)
 // This ensures data is available immediately when dialog opens
 watch(
-	() => [props.customer, props.company, props.allowCreditSale, props.allowCustomerCreditPayment],
+	() => [
+		props.customer,
+		props.company,
+		props.allowCreditSale,
+		props.allowCustomerCreditPayment,
+	],
 	([customer, company, allowCreditSale, allowCustomerCreditPayment]) => {
 		const creditEnabled = allowCreditSale || allowCustomerCreditPayment
 		if (creditEnabled && customer && company) {
@@ -2055,9 +2106,13 @@ watch(show, (newVal) => {
 
 		// Customer credit and balance is pre-fetched when customer changes (see watcher above)
 		// Just log for debugging
-		const creditEnabled = props.allowCreditSale || props.allowCustomerCreditPayment
+		const creditEnabled =
+			props.allowCreditSale || props.allowCustomerCreditPayment
 		if (creditEnabled) {
-			log.debug("[PaymentDialog] Customer credit/balance should be pre-loaded, current balance:", customerBalance.value)
+			log.debug(
+				"[PaymentDialog] Customer credit/balance should be pre-loaded, current balance:",
+				customerBalance.value,
+			)
 		}
 
 		// Load wallet info if customer is selected
@@ -2137,7 +2192,8 @@ function switchToNextPaymentMethod(partialAmount) {
 // add to it instead of creating a duplicate row.
 function _upsertPaymentEntry(method, amt) {
 	const existing = paymentEntries.value.find(
-		(e) => e.mode_of_payment === method.mode_of_payment && !e.is_customer_credit,
+		(e) =>
+			e.mode_of_payment === method.mode_of_payment && !e.is_customer_credit,
 	)
 	if (existing) {
 		existing.amount = roundCurrency((existing.amount || 0) + amt)
@@ -2360,7 +2416,9 @@ async function addCustomPayment(method, amount) {
 		if (grandTotal > 0 && overpay > 0 && overpay > grandTotal) {
 			const confirmed = await showOverpayConfirm({
 				title: __("Large Overpayment"),
-				message: __("Change due would be {0}. Continue?", [formatCurrency(overpay)]),
+				message: __("Change due would be {0}. Continue?", [
+					formatCurrency(overpay),
+				]),
 			})
 			if (!confirmed) return
 		}

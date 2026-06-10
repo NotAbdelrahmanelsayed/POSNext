@@ -36,6 +36,7 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 		display_discount_amount: 0,
 		show_variants_as_items: 0,
 		show_buying_price: 0,
+		cart_lifo: 0,
 		can_see_buying_price: false,
 		// Operations
 		allow_sales_order: 0,
@@ -80,12 +81,10 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 	const enableLoyaltyProgram = computed(() =>
 		Boolean(settings.value.enable_loyalty_program),
 	)
-	const defaultLoyaltyProgram = computed(() =>
-		settings.value.default_loyalty_program || "",
+	const defaultLoyaltyProgram = computed(
+		() => settings.value.default_loyalty_program || "",
 	)
-	const walletAccount = computed(() =>
-		settings.value.wallet_account || "",
-	)
+	const walletAccount = computed(() => settings.value.wallet_account || "")
 	const autoCreateWallet = computed(() =>
 		Boolean(settings.value.auto_create_wallet),
 	)
@@ -159,6 +158,7 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 	const canSeeBuyingPrice = computed(() =>
 		Boolean(settings.value.show_buying_price),
 	)
+	const cartLifo = computed(() => Boolean(settings.value.cart_lifo))
 
 	// Computed - Operations
 	const allowSalesOrder = computed(() =>
@@ -235,17 +235,17 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 	)
 
 	// Computed - Sales Persons
-	const enableSalesPersons = computed(() =>
-		settings.value.enable_sales_persons !== "Disabled"
+	const enableSalesPersons = computed(
+		() => settings.value.enable_sales_persons !== "Disabled",
 	)
-	const salesPersonsMode = computed(() =>
-		settings.value.enable_sales_persons || "Disabled"
+	const salesPersonsMode = computed(
+		() => settings.value.enable_sales_persons || "Disabled",
 	)
-	const isSingleSalesPerson = computed(() =>
-		settings.value.enable_sales_persons === "Single"
+	const isSingleSalesPerson = computed(
+		() => settings.value.enable_sales_persons === "Single",
 	)
-	const isMultipleSalesPersons = computed(() =>
-		settings.value.enable_sales_persons === "Multiple"
+	const isMultipleSalesPersons = computed(
+		() => settings.value.enable_sales_persons === "Multiple",
 	)
 
 	// Computed - Security
@@ -287,7 +287,8 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 			if (preloadedSettings && Object.keys(preloadedSettings).length > 0) {
 				Object.assign(settings.value, preloadedSettings)
 				// can_see_buying_price lives at bootstrap top-level, not inside pos_settings
-				settings.value.can_see_buying_price = bootstrapStore.getCanSeeBuyingPrice()
+				settings.value.can_see_buying_price =
+					bootstrapStore.getCanSeeBuyingPrice()
 				isLoaded.value = true
 				isLoading.value = false
 				return true
@@ -336,6 +337,7 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 			display_discount_amount: 0,
 			show_variants_as_items: 0,
 			show_buying_price: 0,
+			cart_lifo: 0,
 			can_see_buying_price: false,
 			allow_sales_order: 0,
 			allow_select_sales_order: 0,
@@ -455,6 +457,7 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 		showVariantsAsItems,
 		showBuyingPrice,
 		canSeeBuyingPrice,
+		cartLifo,
 
 		// Computed - Operations
 		allowSalesOrder,

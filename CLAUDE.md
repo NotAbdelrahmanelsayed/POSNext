@@ -2,8 +2,6 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **Frontend-specific rules** (API patterns, translation, offline, component conventions) live in `POS/.claude.md` — that file is authoritative for anything inside `POS/src/`.
-
 ---
 
 ## Commands
@@ -27,11 +25,10 @@ bench --site <site> clear-cache      # After Python changes
 bench build --app pos_next           # Rebuild assets via bench (alternative to npm)
 ```
 
-> **Gunicorn `--preload` warning**: The server runs with `--preload`, so Python workers fork from a preloaded master. After any Python file change, the old code stays in memory until workers are reloaded:
+> **Gunicorn `--preload`**: `bench clear-cache` alone does NOT reload Python in memory. After any Python change:
 > ```bash
-> kill -HUP $(pgrep -f "gunicorn.*frappe" | head -1)   # graceful reload
+> kill -HUP $(pgrep -f "gunicorn.*frappe" | head -1)
 > ```
-> `bench clear-cache` alone is NOT sufficient — it clears Redis but not in-process memory.
 
 ---
 
@@ -44,136 +41,166 @@ bench build --app pos_next           # Rebuild assets via bench (alternative to 
 | Frontend SPA | `POS/src/` | Vue 3 + Vite + Pinia + frappe-ui |
 | Frappe app | `pos_next/` | Python + Frappe framework |
 
-The Vue app is compiled to `pos_next/public/pos/` and served as a standalone PWA at `/pos`. It **bypasses** Frappe's normal `app_include_js` hooks — so injecting scripts requires editing `pos_next/www/pos.html` (or the compiled `pos_next/public/pos/index.html`) directly.
+The Vue app compiles to `pos_next/public/pos/` and is served as a standalone PWA at `/pos`. It **bypasses** Frappe's `app_include_js` hooks — scripts cannot be injected via hooks.
 
-> **pos_guard.js** (from `easy_entry`): must be manually present in `pos_next/www/pos.html` just before `</body>`:
+> **pos_guard.js** (`easy_entry` app): must be present in `pos_next/www/pos.html` before `</body>`. `npm run build` and `bench update` can silently remove it. Always re-check after either operation:
 > ```html
 > {% if easy_entry_installed %}
 > <script src="/assets/easy_entry/js/pos_guard.js"></script>
 > {% endif %}
 > ```
-> `bench update` or `npm run build` can overwrite `pos.html` and silently remove this. Always re-check after either operation.
 
 ### Frontend structure
 
 ```
 POS/src/
-├── pages/          # Entry points: POSSale.vue (main POS), Login, Home
-├── components/     # Feature components: sale/, shift/, common/, settings/, invoices/
+├── pages/          # POSSale.vue (main POS page — owns global keyboard handling, dialog orchestration)
+├── components/     # sale/, shift/, common/, settings/, invoices/
 ├── stores/         # Pinia: posCart, itemSearch, customerSearch, posSettings,
-│                   #        bootstrap, posShift, posEvents, posOffers
-├── composables/    # useInvoice, useItems, useOffline, useShift, useToast, usePermissions
-├── utils/          # Pure JS utilities; offline/ subdirectory for worker helpers
-└── workers/        # offline.worker.js — ALL IndexedDB ops run here, not main thread
+│                   #        bootstrap, posShift, posEvents, posOffers, posUI
+├── composables/    # useInvoice, useItems, useOffline, useShift, useToast, usePermissions,
+│                   #   useSearchInput (barcode/search input state, owns scanner/auto-add toggles)
+├── utils/          # Pure JS; offline/ subdirectory for worker helpers
+└── workers/        # offline.worker.js — ALL IndexedDB ops run here
 ```
-
-**State flow**: `bootstrap` store (single API call on startup) → Pinia stores → components. Cart mutations go through `posCart` store; side-effects (taxes, totals) are computed reactively.
-
-**Offline**: Web Worker (`offline.worker.js`) owns all IndexedDB/Dexie operations. Main thread talks to it via `utils/offline/workerClient.js`. Never access IndexedDB from the main thread.
 
 ### Backend structure
 
 ```
 pos_next/
-├── api/            # @frappe.whitelist() endpoints: bootstrap, invoices, items,
-│                   #   customers, offers, shifts, wallet, promotions, qz
-├── pos_next/doctype/   # 20+ custom doctypes (POS Settings, Wallet, POS Offer, etc.)
-├── overrides/      # CustomSalesInvoice — fixes wallet GL entries; hooks into on_submit
+├── api/            # @frappe.whitelist() endpoints: bootstrap, items, invoices, customers,
+│                   #   offers, shifts, wallet, promotions, qz, auth, localization
+├── pos_next/doctype/   # 20+ custom doctypes
+├── overrides/      # CustomSalesInvoice — wallet GL entries; hooks into on_submit
 ├── services/       # Business logic (offers engine, stock, sync)
-├── tasks/          # Scheduled: branding monitor (hourly), promo cleanup (daily)
-├── report/         # Custom reports (sales_vs_shifts, cashier_performance)
-└── hooks.py        # Doc events, override classes, fixtures, scheduled tasks
+└── tasks/          # Scheduled: branding monitor (hourly), promo cleanup (daily)
 ```
 
-**Key hook points in `hooks.py`**:
-- `Sales Invoice` → `validate`, `on_submit`, `on_cancel` (wallet deduction, paid-amount validation)
-- `Customer` → `after_insert`, `on_update` (real-time Socket.IO event to all POS terminals)
-- `POS Profile` → `on_update` (broadcasts profile change to open sessions)
-- Override class: `pos_next.overrides.sales_invoice.CustomSalesInvoice`
+**Key hook points in `hooks.py`**: `Sales Invoice` validate/submit/cancel (wallet, paid-amount validation), `Customer` after_insert/on_update (Socket.IO broadcast), `POS Profile` on_update (broadcasts to open sessions).
 
-### API communication
+### State flow
 
-Frontend → Backend uses two patterns depending on file type (see `POS/.claude.md`):
-- Vue components: `createResource` from frappe-ui
-- JS utilities: `window.frappe.call`
-
-All backend endpoints are in `pos_next/api/` and decorated with `@frappe.whitelist()`.
-
-Real-time updates use Socket.IO via the `posEvents` Pinia store (lazy connection). Events: `stock_update`, `customer_update`, `pos_profile_updated`.
-
-### Invoice submission flow
-
-`PaymentDialog.vue` → emits `payment-completed` → `useInvoice` composable → `submit_invoice` API → `pos_next/api/invoices.py` → ERPNext `Sales Invoice` submit with `CustomSalesInvoice` override. A coalescing mutex in `useInvoice` prevents duplicate submissions from rapid clicks. When offline, the invoice is queued to IndexedDB via the worker and synced when connectivity resumes.
+`bootstrap` store (single API call on startup) → Pinia stores → components. Cart mutations go through `posCart` store; taxes/totals computed reactively.
 
 ---
 
-## Key domain rules
+## Frontend API Patterns
 
-- **Payment methods**: `POS Payment Method` child table has no `default_account` field. Get the account from `Mode of Payment Account` table instead.
-- **Credit sale** (`is_credit_sale: true`): sends `payments: []` to backend. ERPNext requires at least one payment mode — only works if the site has credit sale support configured.
-- **Exact amount mode**: when active for non-cash methods, only the exact invoice total is accepted.
-- **Wallet payments**: handled by `CustomSalesInvoice` override which posts correct GL entries to Receivable accounts (not the wallet account directly).
+**Vue components (`.vue`)** → `createResource` from `frappe-ui`:
+```js
+import { createResource } from 'frappe-ui'
+const res = createResource({ url: 'pos_next.api.items.get_items', auto: false, onSuccess(d) { ... } })
+```
+
+**Composables & stores (`.js` in `src/`)** → `call` from `@/utils/apiWrapper`:
+```js
+import { call } from '@/utils/apiWrapper'
+const result = await call('pos_next.api.items.get_item_details', { item_code, pos_profile })
+// result is already unwrapped — no .message needed
+```
+
+> Do **not** use `window.frappe.call` in the SPA — it may be unavailable. `@/utils/apiWrapper` wraps frappe-ui's `call` with CSRF auto-refresh.
 
 ---
 
-## Feature: Show Buying Price & Remaining Stock in Cart
+## Translation
 
-Each cart item row in `InvoiceCart.vue` shows two extra data points below the item line:
+Always wrap user-facing strings in `__()`. Variables go as the second argument using `{0}` placeholders; never template literals or string concatenation.
 
-| Element | Visible to | Condition |
-|---|---|---|
-| `N left` (stock remaining) | Everyone | `item.actual_qty !== undefined` |
-| `Cost: E£ X.XX` (buying price) | Everyone when setting ON | `posSettings.show_buying_price = 1` AND `item.valuation_rate > 0` |
+```js
+__('Added {0} to cart', [item.item_name])               // ✅
+__(`Added ${item.item_name} to cart`)                   // ❌ template literal
+__('Added ') + item.item_name + __(' to cart')          // ❌ concatenation
+```
 
-### How `show_buying_price` works
+For plural forms, write a complete string for each form. For ambiguous words, pass a context string as the third argument: `__('Change', null, 'Coins')`.
 
-Enabled via **POS Settings → Show Buying Price to Authorized Users** toggle. When ON, all cashiers see the cost. The toggle lives in `POS Settings` doctype (`show_buying_price` Check field).
+---
 
-- `posSettings.canSeeBuyingPrice` computed = `Boolean(settings.value.show_buying_price)` — no role gate, purely the setting.
-- Previously this was role-gated (`System Manager` / `Nexus POS Manager`) but was removed because the setting itself acts as the gate.
+## Toast Notifications
 
-### How `valuation_rate` is sourced (priority order)
+Use `useToast` composable — never `window.frappe.msgprint` or frappe-ui's `toast`:
+```js
+const { showSuccess, showError, showWarning } = useToast()
+showError(error.message || __('Operation failed'))
+```
 
-`Item.valuation_rate` is 0 for most items. The actual cost is in the `Item Price` or `Bin` table. Priority:
+---
 
-1. **`Item Price`** where `buying = 1` (Standard Buying price list)
-2. **`Bin.valuation_rate`** for the item's warehouse (moving average / FIFO cost)
-3. **`Item.valuation_rate`** (rarely populated, only for Standard valuation method)
+## Item Selection Dialog Pattern
 
-This logic runs in two places:
-- `get_items()` in `pos_next/api/items.py` — batch query builds `buying_price_map` and `valuation_rate_map` for search results
-- `get_item_detail()` in `pos_next/api/items.py` — single-item lookup used by `get_item_details` endpoint
+Adding an item that needs user input (variant selection, UOM choice, quantity entry) follows this pattern in `POSSale.vue`:
 
-### Why items may briefly show no cost (cache-first search)
+```js
+// 1. Stage the pending item with a mode
+cartStore.setPendingItem(item, qty, mode)  // modes: 'variant', 'uom', 'simple', 'cart-edit'
+uiStore.showItemSelectionDialog = true
 
-Item searches use a **cache-first** strategy (IndexedDB → server). If the user clicks an item before the server results arrive, the cached item may have `valuation_rate = 0` (old cache). To handle this:
+// 2. ItemSelectionDialog emits @option-selected → handleOptionSelected(option)
+//    option.type matches the mode; for 'uom'/'simple'/'cart-edit' option.quantity is set
+//    'simple'    → cartStore.addItem()           (new item, quantity only dialog)
+//    'cart-edit' → cartStore.updateItemQuantity() (existing cart item, quantity only dialog)
+//    'uom'       → resolves UOM pricing then addItem()
+//    'variant'   → may chain to 'uom' mode
+```
 
-`useInvoice.addItem()` detects `valuation_rate = 0` on a newly added stock item and fires a background call to `pos_next.api.items.get_item_details`. When the response arrives, it sets `cartItem.valuation_rate` on the **reactive proxy** (not the original plain object) to trigger re-render.
+Scanner-only mode (scanner ON, auto-add OFF) forces the `'simple'` dialog for every add route.
 
-### Remaining stock formula
+---
 
+## Global Keyboard Shortcuts
+
+Defined in `POSSale.vue → handleGlobalKeydown`. Shortcuts work from input fields when noted:
+
+| Shortcut | Action |
+|---|---|
+| F4 | Focus item search input |
+| F8 | Focus customer search input |
+| F9 | Proceed to payment |
+| Alt+1…5 | Add search result item #N to cart (works from search input) |
+| Alt+Q | Open quantity dialog for last cart item (works from search input) |
+
+Guard: non-F-keys and non-Alt shortcuts are blocked when an `INPUT` or `TEXTAREA` is focused. To add a new shortcut that works from inputs, add it to the `isAltDigit`/`isAltQ` guard pattern.
+
+---
+
+## Offline / IndexedDB
+
+**All IndexedDB operations must run in the Web Worker** (`src/workers/offline.worker.js`). Main thread communicates via `src/utils/offline/workerClient.js`.
+
+```js
+import { offlineWorker } from '@/utils/offline/workerClient'
+const items = await offlineWorker.searchCachedItems(term, limit)
+```
+
+When querying boolean fields in Dexie, use `.filter()` not `.where().equals()` — booleans are not valid Dexie index keys.
+
+---
+
+## Domain Rules & Pitfalls
+
+**`POS Payment Method` has no `default_account` field.** Get the account from `Mode of Payment Account` table:
+```python
+mop_account = frappe.db.get_value("Mode of Payment Account", {"parent": mode_of_payment, "company": company}, "default_account")
+```
+
+**`Item.valuation_rate` is 0** for most items (ERPNext only populates it for "Standard" valuation method). Priority order for buying cost: `Item Price (buying=1)` → `Bin.valuation_rate` → `Item.valuation_rate`. Implemented in `get_item_detail()` and `get_items()` in `pos_next/api/items.py`.
+
+**Cart item `valuation_rate` may be 0 on add** because item search is cache-first (IndexedDB). `useInvoice.addItem()` fires a background `get_item_details` call when `valuation_rate = 0` and sets the result on the **reactive proxy** (`invoiceItems.value[idx]`), not the original plain object — setting it on the original won't trigger Vue re-render.
+
+**`POS Profile` may not have `customer_group`.** Always use `hasattr()` before accessing it in Python.
+
+**`filteredItems` fallback**: when `searchTerm` is set but `searchResults` is empty, the `itemSearch` store falls back to `allItems`. In scanner mode this causes the wrong cached item to be added on Enter. Guard the "add first result" path with `!scannerEnabled.value`.
+
+---
+
+## Feature: Cart Stock & Buying Price Display
+
+Each cart row in `InvoiceCart.vue` shows `N left` (remaining stock) and optionally `Cost: E£ X.XX` (buying price, controlled by `POS Settings → show_buying_price`).
+
+Remaining stock formula (in cart UOM):
 ```js
 Math.max(0, (item.actual_qty ?? 0) / (item.conversion_factor || 1) - (item.quantity ?? 0))
 ```
 
-`actual_qty` = warehouse stock in **stock UOM**. `conversion_factor` = stock units per 1 cart UOM unit. `quantity` = qty in cart (cart UOM). Dividing `actual_qty` by `conversion_factor` converts it to cart UOM before subtracting. Note: `item.quantity` (not `item.qty`) is the Pinia cart field name.
-
-### Files changed
-
-| File | Change |
-|---|---|
-| `pos_next/pos_next/doctype/pos_settings/pos_settings.json` | Added `show_buying_price` Check field |
-| `pos_next/api/constants.py` | Added `show_buying_price` to `POS_SETTINGS_FIELDS` and `DEFAULT_POS_SETTINGS` |
-| `pos_next/api/bootstrap.py` | `can_see_buying_price` top-level flag (no role gate now) |
-| `pos_next/pos_next/doctype/pos_settings/pos_settings.py` | `get_pos_settings()` injects `can_see_buying_price`; buying price priority logic |
-| `pos_next/api/items.py` | `get_items()` builds `buying_price_map` + `valuation_rate_map` from Bin; `get_item_detail()` has Item Price → Bin → Item fallback |
-| `POS/src/stores/bootstrap.js` | `getCanSeeBuyingPrice()` helper reads top-level `can_see_buying_price` |
-| `POS/src/stores/posSettings.js` | `canSeeBuyingPrice` computed reads `show_buying_price` directly; bootstrap optimization fix copies `can_see_buying_price` |
-| `POS/src/components/settings/POSSettings.vue` | Checkbox for `show_buying_price` in Display Settings |
-| `POS/src/components/sale/InvoiceCart.vue` | Stock & Cost info row rendered under each cart item |
-| `POS/src/composables/useInvoice.js` | `resolveUomPricing` returns `valuation_rate`; background fetch on `valuation_rate=0` |
-| `POS/src/pages/POSSale.vue` | UOM `itemToAdd` spreads `valuation_rate` from pricing response |
-
-### Service worker & deployment note
-
-The POS is a PWA. After `npm run build`, the new `sw.js` has `skipWaiting()` + `clientsClaim()` so it activates immediately on next page load. Users on an old cached version need `Ctrl+Shift+R` (hard refresh) to bypass the service worker and load new JS.
+`posSettings.canSeeBuyingPrice` reads `show_buying_price` directly from settings (no role gate — the setting itself is the gate).

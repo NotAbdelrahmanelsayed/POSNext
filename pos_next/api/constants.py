@@ -42,6 +42,7 @@ POS_SETTINGS_FIELDS = [
 	"session_lock_timeout",
 	"show_variants_as_items",
 	"show_buying_price",
+	"cart_lifo",
 ]
 
 # Default POS Settings values
@@ -74,4 +75,5 @@ DEFAULT_POS_SETTINGS = {
 	"session_lock_timeout": 5,
 	"show_variants_as_items": 0,
 	"show_buying_price": 0,
+	"cart_lifo": 0,
 }

@@ -1379,6 +1379,11 @@ def submit_invoice(invoice=None, data=None):
         if redeemed_customer_credit and not invoice_doc.payments:
             invoice_doc.flags.pos_next_redeemed_customer_credit = flt(redeemed_customer_credit)
 
+        # Allow credit sale (بالأجل) to submit without a payment row.
+        is_credit_sale = data.get("is_credit_sale") or invoice.get("is_credit_sale")
+        if is_credit_sale and not invoice_doc.payments:
+            invoice_doc.flags.pos_next_is_credit_sale = True
+
         # Save before submit
         invoice_doc.flags.ignore_permissions = True
         frappe.flags.ignore_account_permission = True
