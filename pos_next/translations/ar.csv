@@ -1601,3 +1601,7 @@ Points applied: {0}. Please pay remaining {1} with {2},تم خصم النقاط:
 "{0} customer(s) owe money","{0} عميل عليهم مستحقات",""
 "{0} invoice(s)","{0} فاتورة",""
 "{0} took {1} item(s) on credit","{0} أخذ {1} صنف بالآجل",""
+"Auto-Focus Item Search When Idle","التركيز التلقائي على بحث الأصناف عند الخمول",""
+"Automatically return focus to the item search input after a period of inactivity","إعادة التركيز تلقائياً إلى حقل بحث الأصناف بعد فترة من عدم النشاط",""
+"Idle Time Before Refocus (seconds)","مدة الخمول قبل إعادة التركيز (ثوانٍ)",""
+"Seconds of inactivity before focus returns to the item search input","عدد ثواني الخمول قبل عودة التركيز إلى حقل بحث الأصناف",""
