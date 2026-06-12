@@ -43,6 +43,7 @@ POS_SETTINGS_FIELDS = [
 	"cart_lifo",
 	"enable_idle_refocus",
 	"idle_refocus_seconds",
+	"customer_search_show_all",
 ]
 
 # Default POS Settings values
@@ -77,4 +78,5 @@ DEFAULT_POS_SETTINGS = {
 	"cart_lifo": 0,
 	"enable_idle_refocus": 1,
 	"idle_refocus_seconds": 3,
+	"customer_search_show_all": 0,
 }

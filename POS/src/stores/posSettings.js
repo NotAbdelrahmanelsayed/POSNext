@@ -61,6 +61,7 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 		search_limit: 1000,
 		enable_idle_refocus: 1,
 		idle_refocus_seconds: 3,
+		customer_search_show_all: 0,
 		allow_submissions_in_background_job: 0,
 		allow_delete_offline_invoice: 0,
 		allow_change_posting_date: 0,
@@ -164,6 +165,9 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 	const idleRefocusEnabled = computed(() => Boolean(settings.value.enable_idle_refocus));
 	const idleRefocusSeconds = computed(() =>
 		Math.max(1, Number.parseInt(settings.value.idle_refocus_seconds) || 3)
+	);
+	const customerSearchShowAll = computed(() =>
+		Boolean(settings.value.customer_search_show_all)
 	);
 	const allowSubmissionsInBackgroundJob = computed(() =>
 		Boolean(settings.value.allow_submissions_in_background_job)
@@ -290,6 +294,7 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 			search_limit: 1000,
 			enable_idle_refocus: 1,
 			idle_refocus_seconds: 3,
+			customer_search_show_all: 0,
 			allow_submissions_in_background_job: 0,
 			allow_delete_offline_invoice: 0,
 			allow_change_posting_date: 0,
@@ -421,6 +426,7 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 		searchLimit,
 		idleRefocusEnabled,
 		idleRefocusSeconds,
+		customerSearchShowAll,
 		allowSubmissionsInBackgroundJob,
 		allowDeleteOfflineInvoice,
 		allowChangePostingDate,

@@ -65,6 +65,7 @@
   "search_limit",
   "enable_idle_refocus",
   "idle_refocus_seconds",
+  "customer_search_show_all",
   "column_break_advanced",
   "allow_submissions_in_background_job",
   "allow_delete_offline_invoice",
@@ -501,6 +502,13 @@
    "fieldname": "idle_refocus_seconds",
    "fieldtype": "Int",
    "label": "Idle Time Before Refocus (seconds)"
+  },
+  {
+   "default": "0",
+   "description": "Show the complete customer list in the cart search dropdown instead of capping results at 10 (browsing) / 20 (searching)",
+   "fieldname": "customer_search_show_all",
+   "fieldtype": "Check",
+   "label": "Show All Customers in Search"
   },
   {
    "fieldname": "column_break_advanced",

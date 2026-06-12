@@ -1605,3 +1605,7 @@ Points applied: {0}. Please pay remaining {1} with {2},تم خصم النقاط:
 "Automatically return focus to the item search input after a period of inactivity","إعادة التركيز تلقائياً إلى حقل بحث الأصناف بعد فترة من عدم النشاط",""
 "Idle Time Before Refocus (seconds)","مدة الخمول قبل إعادة التركيز (ثوانٍ)",""
 "Seconds of inactivity before focus returns to the item search input","عدد ثواني الخمول قبل عودة التركيز إلى حقل بحث الأصناف",""
+"Show All Customers in Search","عرض كل العملاء في البحث",""
+"Show the complete customer list in the cart search dropdown instead of capping results at the first 10-20 matches.","عرض قائمة العملاء كاملة في قائمة البحث بدلاً من الاقتصار على أول 10-20 نتيجة.",""
+"All Customers","كل العملاء",""
+"Results","النتائج",""
