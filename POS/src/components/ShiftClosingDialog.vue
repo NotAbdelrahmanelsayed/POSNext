@@ -215,64 +215,35 @@
 						<div v-show="showInvoiceDetails" class="border-t border-gray-200">
 							<!-- Mobile Card View -->
 							<div class="md:hidden divide-y divide-gray-200">
-								<div
-									v-for="(invoice, idx) in closingData.pos_transactions"
-									:key="idx"
-									:class="[
-										'p-3',
-										invoice.is_return
-											? 'bg-red-50 hover:bg-red-100'
-											: 'hover:bg-gray-50',
-									]"
-								>
+								<div v-for="(invoice, idx) in closingData.pos_transactions" :key="idx"
+										:class="['p-3', invoice.is_return ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-gray-50']">
 									<div class="flex justify-between items-start mb-2">
 										<div class="flex items-center gap-2">
-											<span
-												:class="[
-													'text-xs font-medium',
-													invoice.is_return
-														? 'text-red-700'
-														: 'text-gray-900',
-												]"
-											>
-												{{
-													invoice.pos_invoice ||
-													invoice.sales_invoice ||
-													__("N/A")
-												}}
+											<span :class="['text-xs font-medium', invoice.is_return ? 'text-red-700' : 'text-gray-900']">
+												{{ invoice.pos_invoice || invoice.sales_invoice || __('N/A') }}
 											</span>
-											<span
-												v-if="invoice.is_return"
-												class="px-1.5 py-0.5 text-xs font-medium bg-red-200 text-red-800 rounded"
-											>
-												{{ __("Return") }}
+											<span v-if="invoice.is_return" class="px-1.5 py-0.5 text-xs font-medium bg-red-200 text-red-800 rounded">
+												{{ __('Return') }}
+											</span>
+											<span v-else-if="invoice.outstanding_amount > 0" class="px-1.5 py-0.5 text-xs font-medium bg-amber-100 text-amber-800 rounded">
+												{{ Number(invoice.grand_total) > 0 ? __('Partially Paid') : __('On Account') }}
 											</span>
 										</div>
-										<span
-											:class="[
-												'text-sm font-semibold',
-												invoice.is_return
-													? 'text-red-700'
-													: 'text-gray-900',
-											]"
-										>
+										<span :class="['text-sm font-semibold', invoice.is_return ? 'text-red-700' : 'text-gray-900']">
 											{{ formatCurrency(invoice.grand_total) }}
 										</span>
 									</div>
-									<div
-										class="flex justify-between items-center text-xs text-gray-600"
-									>
+									<div v-if="invoice.outstanding_amount > 0" class="text-xs text-amber-700 mb-1">
+										{{ __('Unpaid: {0}', [formatCurrency(invoice.outstanding_amount)]) }}
+									</div>
+									<div class="flex justify-between items-center text-xs text-gray-600">
 										<span>{{ invoice.customer }}</span>
-										<span class="text-gray-500">{{
-											formatTime(invoice.posting_date)
-										}}</span>
+										<span class="text-gray-500">{{ formatTime(invoice.posting_date) }}</span>
 									</div>
 								</div>
 								<div class="bg-gray-50 p-3">
 									<div class="flex justify-between items-center">
-										<span class="text-xs font-semibold text-gray-700">{{
-											__("Net Total:")
-										}}</span>
+										<span class="text-xs font-semibold text-gray-700">{{ __('Net Total:') }}</span>
 										<span class="text-sm font-bold text-gray-900">
 											{{ formatCurrency(closingData.grand_total) }}
 										</span>
@@ -285,104 +256,52 @@
 								<table class="min-w-full divide-y divide-gray-200">
 									<thead class="bg-gray-50">
 										<tr>
-											<th
-												class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase"
-											>
-												{{ __("Invoice") }}
-											</th>
-											<th
-												class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase"
-											>
-												{{ __("Type") }}
-											</th>
-											<th
-												class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase"
-											>
-												{{ __("Customer") }}
-											</th>
-											<th
-												class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase"
-											>
-												{{ __("Time") }}
-											</th>
-											<th
-												class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase"
-											>
-												{{ __("Amount") }}
-											</th>
+											<th class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">{{ __('Invoice') }}</th>
+											<th class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">{{ __('Type') }}</th>
+											<th class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">{{ __('Customer') }}</th>
+											<th class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">{{ __('Time') }}</th>
+											<th class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">{{ __('Amount') }}</th>
 										</tr>
 									</thead>
 									<tbody class="bg-white divide-y divide-gray-200">
-										<tr
-											v-for="(invoice, idx) in closingData.pos_transactions"
-											:key="idx"
-											:class="
-												invoice.is_return
-													? 'bg-red-50 hover:bg-red-100'
-													: 'hover:bg-gray-50'
-											"
-										>
+										<tr v-for="(invoice, idx) in closingData.pos_transactions" :key="idx"
+												:class="invoice.is_return ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-gray-50'">
 											<td class="text-start px-6 py-4 whitespace-nowrap">
-												<span
-													:class="[
-														'text-sm font-medium',
-														invoice.is_return
-															? 'text-red-700'
-															: 'text-gray-900',
-													]"
-												>
-													{{
-														invoice.pos_invoice ||
-														invoice.sales_invoice ||
-														__("N/A")
-													}}
+												<span :class="['text-sm font-medium', invoice.is_return ? 'text-red-700' : 'text-gray-900']">
+													{{ invoice.pos_invoice || invoice.sales_invoice || __('N/A') }}
 												</span>
 											</td>
 											<td class="text-start px-6 py-4 whitespace-nowrap">
-												<span
-													v-if="invoice.is_return"
-													class="px-2 py-1 text-xs font-medium bg-red-200 text-red-800 rounded"
-												>
-													{{ __("Return") }}
+												<span v-if="invoice.is_return" class="px-2 py-1 text-xs font-medium bg-red-200 text-red-800 rounded">
+													{{ __('Return') }}
 												</span>
-												<span
-													v-else
-													class="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded"
-												>
-													{{ __("Sale") }}
+												<span v-else-if="invoice.outstanding_amount > 0" class="px-2 py-1 text-xs font-medium bg-amber-100 text-amber-800 rounded">
+													{{ Number(invoice.grand_total) > 0 ? __('Partially Paid') : __('On Account') }}
+												</span>
+												<span v-else class="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded">
+													{{ __('Sale') }}
 												</span>
 											</td>
-											<td
-												class="text-start px-6 py-4 whitespace-nowrap text-sm text-gray-600"
-											>
+											<td class="text-start px-6 py-4 whitespace-nowrap text-sm text-gray-600">
 												{{ invoice.customer }}
 											</td>
-											<td
-												class="text-start px-6 py-4 whitespace-nowrap text-sm text-gray-500"
-											>
+											<td class="text-start px-6 py-4 whitespace-nowrap text-sm text-gray-500">
 												{{ formatTime(invoice.posting_date) }}
 											</td>
 											<td class="text-start px-6 py-4 whitespace-nowrap">
-												<span
-													:class="[
-														'text-sm font-semibold',
-														invoice.is_return
-															? 'text-red-700'
-															: 'text-gray-900',
-													]"
-												>
+												<span :class="['text-sm font-semibold', invoice.is_return ? 'text-red-700' : 'text-gray-900']">
 													{{ formatCurrency(invoice.grand_total) }}
 												</span>
+												<div v-if="invoice.outstanding_amount > 0" class="text-xs text-amber-700">
+													{{ __('Unpaid: {0}', [formatCurrency(invoice.outstanding_amount)]) }}
+												</div>
 											</td>
 										</tr>
 									</tbody>
 									<tfoot class="bg-gray-50">
 										<tr>
-											<td
-												colspan="4"
-												class="px-6 py-4 text-start text-sm font-semibold text-gray-700"
-											>
-												{{ __("Net Total:") }}
+											<td colspan="4" class="px-6 py-4 text-start text-sm font-semibold text-gray-700">
+												{{ __('Net Total:') }}
 											</td>
 											<td class="px-6 py-4 whitespace-nowrap text-start">
 												<span class="text-base font-bold text-gray-900">
