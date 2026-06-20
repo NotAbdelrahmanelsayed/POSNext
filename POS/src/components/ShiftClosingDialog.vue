@@ -115,10 +115,16 @@
                       <span v-if="invoice.is_return" class="px-1.5 py-0.5 text-xs font-medium bg-red-200 text-red-800 rounded">
                         {{ __('Return') }}
                       </span>
+                      <span v-else-if="invoice.outstanding_amount > 0" class="px-1.5 py-0.5 text-xs font-medium bg-amber-100 text-amber-800 rounded">
+                        {{ Number(invoice.grand_total) > 0 ? __('Partially Paid') : __('On Account') }}
+                      </span>
                     </div>
                     <span :class="['text-sm font-semibold', invoice.is_return ? 'text-red-700' : 'text-gray-900']">
                       {{ formatCurrency(invoice.grand_total) }}
                     </span>
+                  </div>
+                  <div v-if="invoice.outstanding_amount > 0" class="text-xs text-amber-700 mb-1">
+                    {{ __('Unpaid: {0}', [formatCurrency(invoice.outstanding_amount)]) }}
                   </div>
                   <div class="flex justify-between items-center text-xs text-gray-600">
                     <span>{{ invoice.customer }}</span>
@@ -159,6 +165,9 @@
                         <span v-if="invoice.is_return" class="px-2 py-1 text-xs font-medium bg-red-200 text-red-800 rounded">
                           {{ __('Return') }}
                         </span>
+                        <span v-else-if="invoice.outstanding_amount > 0" class="px-2 py-1 text-xs font-medium bg-amber-100 text-amber-800 rounded">
+                          {{ Number(invoice.grand_total) > 0 ? __('Partially Paid') : __('On Account') }}
+                        </span>
                         <span v-else class="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded">
                           {{ __('Sale') }}
                         </span>
@@ -173,6 +182,9 @@
                         <span :class="['text-sm font-semibold', invoice.is_return ? 'text-red-700' : 'text-gray-900']">
                           {{ formatCurrency(invoice.grand_total) }}
                         </span>
+                        <div v-if="invoice.outstanding_amount > 0" class="text-xs text-amber-700">
+                          {{ __('Unpaid: {0}', [formatCurrency(invoice.outstanding_amount)]) }}
+                        </div>
                       </td>
                     </tr>
                   </tbody>
@@ -521,6 +533,7 @@
 import { Button, Dialog, FeatherIcon, Input } from "frappe-ui"
 import { computed, onBeforeUnmount, reactive, ref, watch } from "vue"
 import { storeToRefs } from "pinia"
+import { useDialogSubmit } from "../composables/useDialogSubmit"
 import { useShift, shiftState } from "../composables/useShift"
 import { useFormatters } from "../composables/useFormatters"
 import { useToast } from "../composables/useToast"
@@ -546,6 +559,16 @@ const emit = defineEmits(["update:modelValue", "shift-closed"])
 const open = computed({
 	get: () => props.modelValue,
 	set: (value) => emit("update:modelValue", value),
+})
+
+// Ctrl/Cmd+S closes the shift. Enter is left to the amount inputs.
+// Only in entry mode (not the post-close success report).
+useDialogSubmit({
+	isOpen: open,
+	onSubmit: () => submitClosing(),
+	canSubmit: () =>
+		!showSuccessReport.value && canSubmit.value && !submitResource.loading,
+	enter: false,
 })
 
 const { getClosingShiftData, submitClosingShift } = useShift()

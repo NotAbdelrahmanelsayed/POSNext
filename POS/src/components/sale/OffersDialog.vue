@@ -205,6 +205,7 @@ import {
 	DEFAULT_LOCALE,
 	formatCurrency as formatCurrencyUtil,
 } from "@/utils/currency"
+import { useDialogSubmit } from "@/composables/useDialogSubmit"
 import { Button, Dialog } from "frappe-ui"
 import { computed, ref, watch } from "vue"
 
@@ -235,6 +236,15 @@ const props = defineProps({
 const emit = defineEmits(["update:modelValue"])
 
 const show = ref(props.modelValue)
+
+// Info/list dialog: Enter or Ctrl/Cmd+S simply closes it.
+useDialogSubmit({
+	isOpen: show,
+	onSubmit: () => {
+		show.value = false
+	},
+})
+
 const appliedOfferCodes = computed(() => {
 	return new Set(
 		(props.appliedOffers || []).map((entry) => entry?.code).filter(Boolean),

@@ -29,6 +29,7 @@
 				@sync-click="handleSyncClick"
 				@printer-click="openHistoryDialog"
 				@refresh-click="handleRefresh"
+				@help-click="uiStore.showShortcutsDialog = true"
 				@clear-cache="handleClearCache"
 				@logout="uiStore.showLogoutDialog = true"
 			>
@@ -396,6 +397,7 @@
 								@show-history="openHistoryDialog"
 								@show-return="openReturnDialog"
 								@close-shift="handleCloseShift"
+								@view-customer-dues="handleViewCustomerDues"
 							/>
 						</div>
 					</keep-alive>
@@ -513,6 +515,9 @@
 				:pos-profile="shiftStore.profileName"
 				@customer-selected="handleCustomerSelected"
 			/>
+
+			<!-- Keyboard Shortcuts Help Dialog -->
+			<KeyboardShortcutsDialog />
 
 			<!-- Shift Opening Dialog -->
 			<ShiftOpeningDialog
@@ -674,6 +679,27 @@
 				@load-draft="handleLoadDraftFromManagement"
 				@delete-draft="handleDeleteDraft"
 				@refresh-history="loadInvoiceHistoryData"
+				@view-customer-account="handleViewCustomerAccount"
+			/>
+
+			<!-- Credit Sales Summary Dialog -->
+			<CreditSalesSummaryDialog
+				v-model="uiStore.showCreditSalesSummary"
+				:pos-profile="shiftStore.profileName"
+				:currency="shiftStore.profileCurrency"
+				:company="shiftStore.profileCompany"
+				@select-customer="handleCreditSummarySelect"
+			/>
+
+			<!-- Customer Dues Dialog -->
+			<CustomerDuesDialog
+				v-model="showCustomerDues"
+				:customer="customerForDues"
+				:pos-profile="shiftStore.profileName"
+				:currency="shiftStore.profileCurrency"
+				:company="shiftStore.profileCompany"
+				@print-invoice="handlePrintInvoice"
+				@payment-completed="loadInvoiceHistoryData"
 			/>
 
 			<!-- Invoice Detail Dialog -->
@@ -993,8 +1019,12 @@
 // Module-scoped init guard — prevents redundant heavy initialization
 // when component remounts due to translationVersion changes.
 // Tracks the profile+shift key so a user/shift change correctly re-initializes.
-const _initializedKey = null
-const _posInitPromise = null
+// Both are reassigned from <script setup>, which Biome analyzes separately —
+// its useConst "safe fix" would turn these into const and crash POS init.
+// biome-ignore lint/style/useConst: reassigned in <script setup>
+let _initializedKey = null
+// biome-ignore lint/style/useConst: reassigned in <script setup>
+let _posInitPromise = null
 </script>
 
 <script setup>
@@ -1012,6 +1042,7 @@ import CreateCustomerDialog from "@/components/sale/CreateCustomerDialog.vue";
 import CustomerDialog from "@/components/sale/CustomerDialog.vue";
 import DraftInvoicesDialog from "@/components/sale/DraftInvoicesDialog.vue";
 import InvoiceCart from "@/components/sale/InvoiceCart.vue";
+import KeyboardShortcutsDialog from "@/components/KeyboardShortcutsDialog.vue";
 import InvoiceHistoryDialog from "@/components/sale/InvoiceHistoryDialog.vue";
 import ItemSelectionDialog from "@/components/sale/ItemSelectionDialog.vue";
 import ItemsSelector from "@/components/sale/ItemsSelector.vue";
@@ -1024,6 +1055,8 @@ import WarehouseAvailabilityDialog from "@/components/sale/WarehouseAvailability
 import POSSettings from "@/components/settings/POSSettings.vue";
 import InvoiceManagement from "@/components/invoices/InvoiceManagement.vue";
 import InvoiceDetailDialog from "@/components/invoices/InvoiceDetailDialog.vue";
+import CustomerDuesDialog from "@/components/customers/CustomerDuesDialog.vue";
+import CreditSalesSummaryDialog from "@/components/customers/CreditSalesSummaryDialog.vue";
 import { useRealtimeStock } from "@/composables/useRealtimeStock";
 import { useSessionLock } from "@/composables/useSessionLock";
 import { usePOSEvents } from "@/composables/usePOSEvents";
@@ -1045,7 +1078,7 @@ import { qzConnected, connect as qzConnect, disconnect as qzDisconnect } from "@
 
 import { Button, Dialog, createResource } from "frappe-ui";
 import { call } from "@/utils/apiWrapper";
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useToast } from "@/composables/useToast";
 
 import { useCustomerSearchStore } from "@/stores/customerSearch";
@@ -1151,6 +1184,10 @@ const showStockLookup = ref(false);
 // Invoice Management dialog
 const showInvoiceManagement = ref(false);
 
+// Customer Dues dialog
+const showCustomerDues = ref(false);
+const customerForDues = ref(null);
+
 // Invoice Detail dialog
 const showInvoiceDetail = ref(false);
 const selectedInvoiceForView = ref(null);
@@ -1246,7 +1283,13 @@ onMounted(async () => {
 			itemsSelectorRef.value?.focusSearchInput();
 		} else if (event.key === "F8") {
 			event.preventDefault();
-			invoiceCartRef.value?.focusCustomerSearch();
+			if (!uiStore.isDesktop && uiStore.mobileActiveTab !== "cart") {
+				// Cart (and its search input) is v-if-gated on the active tab
+				uiStore.mobileActiveTab = "cart";
+				nextTick(() => invoiceCartRef.value?.focusCustomerSearch());
+			} else {
+				invoiceCartRef.value?.focusCustomerSearch();
+			}
 		} else if (event.key === "F9") {
 			event.preventDefault();
 			handleProceedToPayment();
@@ -1258,6 +1301,11 @@ onMounted(async () => {
 				handleItemSelected(item);
 				itemsSelectorRef.value?.clearSearchAndResetInput();
 			}
+		} else if (event.key === "F1" || event.key === "?") {
+			// F1 works even while an input is focused (pos_guard keeps refocusing
+			// the item search, which would swallow "?")
+			event.preventDefault();
+			uiStore.showShortcutsDialog = true;
 		} else if (isAltQ && cartStore.invoiceItems.length > 0) {
 			const lastItem = cartStore.invoiceItems[cartStore.invoiceItems.length - 1];
 			if (lastItem && !lastItem.is_free_item) {
@@ -2940,7 +2988,16 @@ function handleManagementMenuClick(menuItem) {
 	} else if (menuItem === "products") {
 		// Open Stock Lookup dialog in search mode
 		showStockLookup.value = true;
+	} else if (menuItem === "credit-sales") {
+		uiStore.showCreditSalesSummary = true;
 	}
+}
+
+// Drill from the Credit Sales summary into a customer's account statement.
+// The summary dialog stays open underneath; the statement (z-[300]) covers it.
+function handleCreditSummarySelect(customerId) {
+	customerForDues.value = customerId;
+	showCustomerDues.value = true;
 }
 
 // Load invoice history data
@@ -2999,6 +3056,18 @@ async function loadInvoiceHistoryData() {
 
 		invoiceHistoryData.value = [];
 	}
+}
+
+// Handle customer dues dialog (from InvoiceCart wallet button)
+function handleViewCustomerDues(customer) {
+	customerForDues.value = customer;
+	showCustomerDues.value = true;
+}
+
+// Handle customer account click from InvoiceManagement unpaid list
+function handleViewCustomerAccount(customerId) {
+	customerForDues.value = customerId;
+	showCustomerDues.value = true;
 }
 
 // Handle invoice actions from InvoiceManagement

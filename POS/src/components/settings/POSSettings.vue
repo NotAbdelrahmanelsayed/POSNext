@@ -567,6 +567,11 @@
 											:label="__('LIFO Cart Order (Newest on Top)')"
 											:description="__('Show the most recently added item at the top of the cart instead of the bottom.')"
 										/>
+										<CheckboxField
+											v-model="settings.customer_search_show_all"
+											:label="__('Show All Customers in Search')"
+											:description="__('Show the complete customer list in the cart search dropdown instead of capping results at the first 10-20 matches.')"
+										/>
 									</div>
 								</div>
 							</div>
@@ -593,6 +598,7 @@
 import CheckboxField from "@/components/settings/CheckboxField.vue"
 import NumberField from "@/components/settings/NumberField.vue"
 import SelectField from "@/components/settings/SelectField.vue"
+import { useDialogSubmit } from "@/composables/useDialogSubmit"
 import { useToast } from "@/composables/useToast"
 import { Button, call, createResource } from "frappe-ui"
 import { computed, onMounted, onUnmounted, ref, watch } from "vue"
@@ -626,6 +632,13 @@ const props = defineProps({
 const emit = defineEmits(["update:modelValue"])
 
 const show = ref(props.modelValue)
+
+// Enter or Ctrl/Cmd+S saves the settings.
+useDialogSubmit({
+	isOpen: show,
+	onSubmit: () => saveSettings(),
+	canSubmit: () => !saving.value,
+})
 
 // State
 const activeTab = ref("stock")
@@ -878,6 +891,10 @@ async function saveSettings() {
 			}
 			if ("cart_lifo" in result) {
 				posSettingsStore.settings.cart_lifo = result.cart_lifo
+			}
+			if ("customer_search_show_all" in result) {
+				posSettingsStore.settings.customer_search_show_all =
+					result.customer_search_show_all
 			}
 		}
 

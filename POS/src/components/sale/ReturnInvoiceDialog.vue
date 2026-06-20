@@ -758,6 +758,7 @@
 </template>
 
 <script setup>
+import { useDialogSubmit } from "@/composables/useDialogSubmit"
 import { useOfflineStatus } from "@/composables/useOfflineStatus"
 import { useToast } from "@/composables/useToast"
 import { getPaymentIcon } from "@/utils/payment"
@@ -836,6 +837,15 @@ const errorDialog = reactive({
 	message: "",
 })
 const returnModal = reactive({ visible: false })
+
+// Ctrl/Cmd+S confirms the return from the item-selection step (returnModal).
+// Enter is left alone (search/qty inputs; Ctrl+Enter already handled locally).
+useDialogSubmit({
+	isOpen: () => returnModal.visible,
+	onSubmit: () => handleCreateReturn(),
+	canSubmit: () => canCreateReturn.value && !isSubmitting.value,
+	enter: false,
+})
 const returnExpiredDialog = reactive({
 	visible: false,
 	invoiceName: "",

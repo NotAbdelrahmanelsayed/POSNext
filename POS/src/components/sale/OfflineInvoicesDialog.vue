@@ -248,6 +248,7 @@ import {
 	DEFAULT_CURRENCY,
 	formatCurrency as formatCurrencyUtil,
 } from "@/utils/currency"
+import { useDialogSubmit } from "@/composables/useDialogSubmit"
 import { Button, Dialog } from "frappe-ui"
 import { computed, ref, watch } from "vue"
 
@@ -291,6 +292,16 @@ const selectedInvoice = ref(null)
 const showDetails = ref(false)
 const showDeleteConfirm = ref(false)
 const invoiceToDelete = ref(null)
+
+// Info/list dialog: Enter or Ctrl/Cmd+S closes it, unless a nested
+// details/delete-confirm dialog is currently open.
+useDialogSubmit({
+	isOpen: show,
+	onSubmit: () => {
+		show.value = false
+	},
+	canSubmit: () => !showDetails.value && !showDeleteConfirm.value,
+})
 
 // Load invoices when dialog opens
 watch(show, async (newVal) => {

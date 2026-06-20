@@ -84,6 +84,7 @@
 					/>
 					<!-- Barcode Scan Icon and Auto-Add Toggle -->
 					<div class="absolute inset-y-0 end-0 pe-1 sm:pe-2 flex items-center gap-0.5">
+						<KbdHint keys="F4" class="me-0.5" />
 						<button
 							@click="toggleBarcodeScanner"
 							:class="[
@@ -730,6 +731,7 @@
 </template>
 
 <script setup>
+import KbdHint from "@/components/common/KbdHint.vue"
 import LazyImage from "@/components/common/LazyImage.vue"
 import WarehouseAvailabilityDialog from "@/components/sale/WarehouseAvailabilityDialog.vue"
 import { useItemSearchStore } from "@/stores/itemSearch"

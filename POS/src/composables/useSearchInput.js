@@ -86,21 +86,29 @@ export function useSearchInput({
 				searchInputRef.value?.value?.trim() || itemStore.searchTerm?.trim()
 			if (!barcode) return
 
+			// Snapshot the top search result NOW, before clearSearch() resets
+			// filteredItems to the full cached list. The searchTerm guard ensures
+			// this is a real search result, not the browse list — filteredItems
+			// sources from searchResults when a term is set (stores/itemSearch.js).
+			const firstResult =
+				(itemStore.searchTerm && itemStore.filteredItems?.[0]) || null
+
 			// If search results are visible and NOT in scanner mode, add the first one directly.
 			// In scanner mode always fall through to exact barcode lookup — cache results
 			// can arrive before the scanner's Enter event and cause the wrong item to be added.
-			const firstResult = itemStore.filteredItems?.[0]
-			if (firstResult && itemStore.searchTerm && !scannerEnabled.value) {
+			if (firstResult && !scannerEnabled.value) {
 				onItemFound(firstResult, autoAddEnabled.value)
 				clearSearchAndResetInput()
 				focusSearchInput()
 				return
 			}
 
-			// No search results → fall back to barcode lookup
+			// Scanner path: barcode-first, then top-result fallback. Exact barcode
+			// scans stay correct; if no barcode matches, the snapshotted top result
+			// is added (same item Alt+1 adds).
 			itemStore.clearSearch()
 			if (searchInputRef.value) searchInputRef.value.value = ""
-			processBarcodeScan(barcode, autoAddEnabled.value)
+			processBarcodeScan(barcode, autoAddEnabled.value, firstResult)
 			return
 		}
 		// All other keys: no special handling needed.
@@ -133,9 +141,13 @@ export function useSearchInput({
 				const barcode =
 					searchInputRef.value?.value?.trim() || itemStore.searchTerm?.trim()
 				if (barcode) {
+					// Snapshot the top result before clearSearch() so typed names
+					// auto-add instead of warning "not found".
+					const fallbackItem =
+						(itemStore.searchTerm && itemStore.filteredItems?.[0]) || null
 					itemStore.clearSearch()
 					if (searchInputRef.value) searchInputRef.value.value = ""
-					processBarcodeScan(barcode, true)
+					processBarcodeScan(barcode, true, fallbackItem)
 				}
 			}, 500)
 		}
@@ -155,12 +167,20 @@ export function useSearchInput({
 	 * the next begins, preventing double-adds and lost barcodes.
 	 *
 	 * Lookup: exact barcode match via `itemStore.searchByBarcode()`.
-	 * If the barcode is not found, shows a "not found" warning.
+	 * Barcode-first, then top-result fallback: if the exact barcode lookup
+	 * misses and the caller passed a `fallbackItem` (the snapshotted top search
+	 * result — the same item Alt+1 would add), that item is added instead of
+	 * warning. Known scanned barcodes always resolve exactly, so the fallback
+	 * only fires for non-barcode (typed) input. The "not found" warning shows
+	 * only when there is no fallback item.
 	 *
-	 * @param {string}  barcode      - Pre-captured barcode value
-	 * @param {boolean} forceAutoAdd - When true, item is added without user click
+	 * @param {string}      barcode      - Pre-captured barcode value
+	 * @param {boolean}     forceAutoAdd - When true, item is added without user click
+	 * @param {Object|null} fallbackItem - Snapshotted top search result, captured
+	 *        by the caller before clearSearch() (since clearSearch() resets
+	 *        filteredItems to the full cached list). Added when the barcode misses.
 	 */
-	function processBarcodeScan(barcode, forceAutoAdd) {
+	function processBarcodeScan(barcode, forceAutoAdd, fallbackItem = null) {
 		const shouldAutoAdd =
 			forceAutoAdd || (scannerEnabled.value && autoAddEnabled.value)
 
@@ -176,10 +196,15 @@ export function useSearchInput({
 				console.error("Barcode API error:", error)
 			}
 
-			// Barcode not found — show clear "not found" message.
-			// Note: we cannot fall back to filteredItems here because
-			// clearSearch() was called before the API request, so
-			// filteredItems would contain ALL cached items (not search results).
+			// Barcode not found → fall back to the snapshotted top search result
+			// (same item Alt+1 adds) when the caller provided one.
+			if (fallbackItem) {
+				onItemFound(fallbackItem, shouldAutoAdd)
+				focusSearchInput()
+				return
+			}
+
+			// No barcode match and no fallback — show clear "not found" message.
 			showWarning(
 				__("Item Not Found: No item found with barcode: {0}", [barcode]),
 			)

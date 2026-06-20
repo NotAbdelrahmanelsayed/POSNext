@@ -200,6 +200,7 @@
 <script setup>
 import { Button, Dialog, createResource } from "frappe-ui"
 import { computed, ref, watch } from "vue"
+import { useDialogSubmit } from "@/composables/useDialogSubmit"
 import { useSerialNumberStore } from "@/stores/serialNumber"
 import { usePOSCartStore } from "@/stores/posCart"
 import { getCachedBatchData, getCachedSerialData } from "@/utils/offline/items"
@@ -225,6 +226,14 @@ const serialStore = useSerialNumberStore()
 const cartStore = usePOSCartStore()
 
 const show = ref(props.modelValue)
+
+// Enter or Ctrl/Cmd+S confirms the batch/serial selection.
+useDialogSubmit({
+	isOpen: show,
+	onSubmit: () => handleConfirm(),
+	canSubmit: () => isValid.value,
+})
+
 const warehouseBatches = ref([]) // Raw batches from warehouse
 const availableSerials = ref([])
 const selectedBatch = ref(null)

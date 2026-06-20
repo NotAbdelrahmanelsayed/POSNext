@@ -282,6 +282,7 @@
 </template>
 
 <script setup>
+import { useDialogSubmit } from "@/composables/useDialogSubmit"
 import { useToast } from "@/composables/useToast"
 import { usePOSSettingsStore } from "@/stores/posSettings"
 import { useSerialNumberStore } from "@/stores/serialNumber"
@@ -342,6 +343,13 @@ const getItemDetailsResource = createResource({
 const show = computed({
 	get: () => props.modelValue,
 	set: (val) => emit("update:modelValue", val),
+})
+
+// Enter or Ctrl/Cmd+S saves the item edit.
+useDialogSubmit({
+	isOpen: show,
+	onSubmit: () => updateItem(),
+	canSubmit: () => hasStock.value && !isCheckingStock.value,
 })
 
 const availableUoms = computed(() => {

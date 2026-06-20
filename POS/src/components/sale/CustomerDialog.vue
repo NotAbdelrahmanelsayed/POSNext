@@ -180,6 +180,7 @@
 </template>
 
 <script setup>
+import { useDialogSubmit } from "@/composables/useDialogSubmit"
 import { useCustomerSearchStore } from "@/stores/customerSearch"
 import { Button, Dialog } from "frappe-ui"
 import { storeToRefs } from "pinia"
@@ -210,6 +211,15 @@ const showCreateDialog = ref(false)
 const show = computed({
 	get: () => props.modelValue,
 	set: (val) => emit("update:modelValue", val),
+})
+
+// Enter already selects the highlighted customer; Ctrl/Cmd+S just closes.
+useDialogSubmit({
+	isOpen: show,
+	onSubmit: () => {
+		show.value = false
+	},
+	enter: false,
 })
 
 // Alias for template compatibility

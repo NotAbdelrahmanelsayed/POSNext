@@ -1005,6 +1005,7 @@
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
 							</svg>
 							<span>{{ isSubmitting ? __('Processing...') : __('Pay on Account') }}</span>
+							<KbdHint keys="Alt+C" variant="overlay" />
 						</button>
 
 						<!-- Complete/Partial Payment Button -->
@@ -1074,6 +1075,7 @@
 </template>
 
 <script setup>
+import KbdHint from "@/components/common/KbdHint.vue"
 import { usePOSSettingsStore } from "@/stores/posSettings"
 import {
 	DEFAULT_CURRENCY,
@@ -1087,6 +1089,7 @@ import { logger } from "@/utils/logger"
 import { Dialog, createResource, call } from "frappe-ui"
 import { computed, ref, watch, nextTick, onMounted, onUnmounted } from "vue"
 import { useToast } from "@/composables/useToast"
+import { useDialogSubmit } from "@/composables/useDialogSubmit"
 import { useLongPress } from "@/composables/useLongPress"
 import { usePaymentNumpad } from "@/composables/usePaymentNumpad"
 import { useResponsivePayment } from "@/composables/useResponsivePayment"
@@ -1187,6 +1190,14 @@ const show = computed({
 	set: (val) => emit("update:modelValue", val),
 })
 
+// Ctrl/Cmd+S completes payment. Enter is left to the amount inputs.
+useDialogSubmit({
+	isOpen: show,
+	onSubmit: () => completePayment(),
+	canSubmit: () => !props.isSubmitting && canComplete.value,
+	enter: false,
+})
+
 const paymentMethods = ref([])
 const loadingPaymentMethods = ref(false)
 const lastSelectedMethod = ref(null)
@@ -1252,6 +1263,7 @@ watch(
 		if (isOpen) {
 			// Reset min height when dialog opens so we can measure fresh
 			rightColumnMinHeight.value = "auto"
+			lastShortcutPayment.value = null
 			// Small delay to ensure DOM is rendered
 			setTimeout(syncColumnHeights, 100)
 		}
@@ -1280,12 +1292,53 @@ function handleNumpadEnter(value) {
 	}
 }
 
-function handlePaymentMethodShortcut(event) {
+// Tracks the payment added by the last Alt+N shortcut so a subsequent
+// Alt+N can move that amount to a different method instead of being ignored.
+const lastShortcutPayment = ref(null)
+
+// Take back the payment added by the previous Alt+N so it can be re-added
+// to `method`. Returns false when there is nothing safe to undo.
+function undoShortcutPayment(method) {
+	const prev = lastShortcutPayment.value
+	if (!prev || prev.mode_of_payment === method.mode_of_payment) return false
+	const entry = paymentEntries.value.find(
+		(e) => e.mode_of_payment === prev.mode_of_payment && !e.is_customer_credit,
+	)
+	if (!entry || entry.amount < prev.amount) return false
+	// Don't undo if the invoice would still be overpaid afterwards
+	// (e.g. a large cash overpayment was added on top)
+	const remainingAfter = roundCurrency(
+		roundCurrency(props.grandTotal) - totalPaid.value + prev.amount,
+	)
+	if (remainingAfter <= 0) return false
+
+	entry.amount = roundCurrency(entry.amount - prev.amount)
+	if (entry.amount <= 0) {
+		paymentEntries.value = paymentEntries.value.filter((e) => e !== entry)
+	}
+	lastShortcutPayment.value = null
+	return true
+}
+
+async function handlePaymentMethodShortcut(event) {
 	if (!props.modelValue) return
 	if (!event.altKey) return
+
+	// Alt+C: Pay on Account (credit sale) — same guards as the orange button
+	if (event.code === "KeyC") {
+		if (
+			!props.allowCreditSale ||
+			paymentEntries.value.length > 0 ||
+			props.isSubmitting
+		)
+			return
+		event.preventDefault()
+		addCreditAccountPayment()
+		return
+	}
+
 	const digit = Number.parseInt(event.key, 10)
 	if (Number.isNaN(digit) || digit < 1 || digit > 9) return
-	if (remainingAmount.value <= 0) return
 
 	const method = filteredPaymentMethods.value[digit - 1]
 	if (!method) return
@@ -1297,9 +1350,16 @@ function handlePaymentMethodShortcut(event) {
 	)
 		return
 
+	// Fully paid: switch the previous shortcut payment to the new method
+	if (remainingAmount.value <= 0 && !undoShortcutPayment(method)) return
+
 	event.preventDefault()
 	lastSelectedMethod.value = method
-	addCustomPayment(method, remainingAmount.value)
+	const added = await addCustomPayment(method, remainingAmount.value)
+	lastShortcutPayment.value =
+		added > 0
+			? { mode_of_payment: method.mode_of_payment, amount: added }
+			: null
 }
 
 onMounted(() => window.addEventListener("keydown", handlePaymentMethodShortcut))
@@ -2501,6 +2561,8 @@ async function addCustomPayment(method, amount) {
 			switchToNextPaymentMethod(amt)
 		})
 	}
+
+	return amt
 }
 
 // Apply existing customer credit to payment

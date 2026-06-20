@@ -228,6 +228,14 @@
 						></span>
 					</div>
 
+					<!-- Keyboard Shortcuts Help -->
+					<ActionButton
+						:icon="helpIcon"
+						:title="__('Keyboard Shortcuts')"
+						@click="$emit('help-click')"
+						:aria-label="__('Show keyboard shortcuts')"
+					/>
+
 					<!-- Refresh -->
 					<ActionButton
 						:icon="refreshIcon"
@@ -287,6 +295,7 @@ const emit = defineEmits([
 	"sync-click",
 	"printer-click",
 	"refresh-click",
+	"help-click",
 	"menu-click",
 	"logout",
 	"menu-opened",
@@ -452,4 +461,7 @@ const printerIcon =
 	"M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
 const refreshIcon =
 	"M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+
+const helpIcon =
+	"M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
 </script>

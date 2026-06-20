@@ -193,6 +193,7 @@
 import { Button, Dialog, Input } from "frappe-ui"
 import { createResource } from "frappe-ui"
 import { computed, ref, watch } from "vue"
+import { useDialogSubmit } from "../composables/useDialogSubmit"
 import { useShift } from "../composables/useShift"
 import { useFormatters } from "../composables/useFormatters"
 import ShiftClosingDialog from "./ShiftClosingDialog.vue"
@@ -207,6 +208,22 @@ const emit = defineEmits(["update:modelValue", "shift-opened", "dialog-closed"])
 const open = computed({
 	get: () => props.modelValue,
 	set: (value) => emit("update:modelValue", value),
+})
+
+// Enter / Ctrl+S advances the current step's primary action:
+// step 1 → Next (needs a selected profile), step 2 → Open Shift.
+// Step 3 is a resume/close decision with no single primary action — skip.
+useDialogSubmit({
+	isOpen: open,
+	onSubmit: () => {
+		if (step.value === 1) nextStep()
+		else if (step.value === 2) openShift()
+	},
+	canSubmit: () => {
+		if (step.value === 1) return !!selectedProfile.value
+		if (step.value === 2) return !createShiftResource.loading
+		return false
+	},
 })
 
 const { createOpeningShift, getOpeningDialogData, checkOpeningShift } =

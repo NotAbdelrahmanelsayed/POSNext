@@ -501,6 +501,7 @@
 import { ref, computed, watch, nextTick } from "vue"
 import { call, Dialog } from "frappe-ui"
 import { __ } from "@/utils/translation"
+import { useDialogSubmit } from "@/composables/useDialogSubmit"
 
 const props = defineProps({
 	modelValue: Boolean,
@@ -531,6 +532,14 @@ const emit = defineEmits(["update:modelValue", "close"])
 const show = computed({
 	get: () => props.modelValue,
 	set: (val) => emit("update:modelValue", val),
+})
+
+// Ctrl/Cmd+S confirms variant selection. Enter is left to the search input.
+useDialogSubmit({
+	isOpen: show,
+	onSubmit: () => confirmVariantSelection(),
+	canSubmit: () => selectedVariants.value.length > 0,
+	enter: false,
 })
 
 // Close dialog helper

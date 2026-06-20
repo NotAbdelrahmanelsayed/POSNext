@@ -25,8 +25,17 @@ function posGuardInjectPlugin() {
 			try {
 				let html = await fs.readFile(htmlPath, "utf8")
 				const marker = "{% if easy_entry_installed %}"
-				if (!html.includes(marker)) {
-					const injection = `          {% if easy_entry_installed %}\n          <script src="/assets/easy_entry/js/pos_guard.js"></script>\n          {% endif %}\n`
+				// Version param busts browser/SW caches of the guard on every build
+				const tag = `<script src="/assets/easy_entry/js/pos_guard.js?v=${buildVersion}"></script>`
+				if (html.includes(marker)) {
+					html = html.replace(
+						/<script src="\/assets\/easy_entry\/js\/pos_guard\.js[^"]*"><\/script>/,
+						tag,
+					)
+					await fs.writeFile(htmlPath, html, "utf8")
+					console.log("\n✓ pos_guard.js tag refreshed in pos.html")
+				} else {
+					const injection = `          {% if easy_entry_installed %}\n          ${tag}\n          {% endif %}\n`
 					html = html.replace("</body>", injection + "          </body>")
 					await fs.writeFile(htmlPath, html, "utf8")
 					console.log("\n✓ pos_guard.js injected into pos.html")

@@ -151,6 +151,7 @@ import {
 } from "@/utils/currency"
 import { Button, Dialog, Input, createResource } from "frappe-ui"
 import { ref, watch } from "vue"
+import { useDialogSubmit } from "@/composables/useDialogSubmit"
 import { useInvoice } from "@/composables/useInvoice"
 import { useToast } from "@/composables/useToast"
 
@@ -194,6 +195,15 @@ const emit = defineEmits([
 ])
 
 const show = ref(props.modelValue)
+
+// Ctrl/Cmd+S applies the coupon. Enter is wired locally to the code input.
+useDialogSubmit({
+	isOpen: show,
+	onSubmit: () => applyCoupon(),
+	canSubmit: () => !applying.value,
+	enter: false,
+})
+
 const couponCode = ref("")
 const giftCards = ref([])
 const appliedDiscount = ref(null)

@@ -43,6 +43,7 @@ POS_SETTINGS_FIELDS = [
 	"show_variants_as_items",
 	"show_buying_price",
 	"cart_lifo",
+	"customer_search_show_all",
 ]
 
 # Default POS Settings values
@@ -76,4 +77,5 @@ DEFAULT_POS_SETTINGS = {
 	"show_variants_as_items": 0,
 	"show_buying_price": 0,
 	"cart_lifo": 0,
+	"customer_search_show_all": 0,
 }

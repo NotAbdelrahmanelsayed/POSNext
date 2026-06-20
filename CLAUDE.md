@@ -1,3 +1,10 @@
+# OpenWolf
+
+@.wolf/OPENWOLF.md
+
+This project uses OpenWolf for context management. Read and follow .wolf/OPENWOLF.md every session. Check .wolf/cerebrum.md before generating code. Check .wolf/anatomy.md before reading files.
+
+
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
@@ -154,13 +161,16 @@ Defined in `POSSale.vue → handleGlobalKeydown`. Shortcuts work from input fiel
 
 | Shortcut | Action |
 |---|---|
+| F1 (or `?`) | Open Keyboard Shortcuts help dialog (`KeyboardShortcutsDialog.vue`) |
 | F4 | Focus item search input |
-| F8 | Focus customer search input |
+| F8 | Focus customer search input (temporarily deselects current customer to reveal the input; Escape/outside-click restores via `previousCustomer`) |
 | F9 | Proceed to payment |
 | Alt+1…5 | Add search result item #N to cart (works from search input) |
 | Alt+Q | Open quantity dialog for last cart item (works from search input) |
 
-Guard: non-F-keys and non-Alt shortcuts are blocked when an `INPUT` or `TEXTAREA` is focused. To add a new shortcut that works from inputs, add it to the `isAltDigit`/`isAltQ` guard pattern.
+Payment dialog (own handler `handlePaymentMethodShortcut` in `PaymentDialog.vue`): Alt+1…9 selects payment method #N, **Alt+C** = Pay on Account (credit sale, same guards as the orange button — submits immediately).
+
+Guard: non-F-keys and non-Alt shortcuts are blocked when an `INPUT` or `TEXTAREA` is focused (pos_guard.js idle-refocuses item search, which is why help uses F1, not just `?`). All sale-screen shortcuts are suppressed while any `useDialog`-registered dialog is open (`uiStore.isAnyDialogOpen`). To add a new shortcut that works from inputs, add it to the `isAltDigit`/`isAltQ` guard pattern. Inline `<kbd>` hints use `components/common/KbdHint.vue` (`hidden md:inline-flex`).
 
 ---
 
@@ -189,6 +199,14 @@ mop_account = frappe.db.get_value("Mode of Payment Account", {"parent": mode_of_
 **Cart item `valuation_rate` may be 0 on add** because item search is cache-first (IndexedDB). `useInvoice.addItem()` fires a background `get_item_details` call when `valuation_rate = 0` and sets the result on the **reactive proxy** (`invoiceItems.value[idx]`), not the original plain object — setting it on the original won't trigger Vue re-render.
 
 **`POS Profile` may not have `customer_group`.** Always use `hasattr()` before accessing it in Python.
+
+**New POS Settings fields MUST be added to `POS_SETTINGS_FIELDS` and `DEFAULT_POS_SETTINGS` in `pos_next/api/constants.py`.** `get_pos_settings` selects `"*"` so the settings dialog sees new fields automatically, but the normal SPA boot path (`pos_next.api.bootstrap.get_initial_data → _get_pos_settings`) uses the `POS_SETTINGS_FIELDS` whitelist — a field missing there silently never reaches the frontend store. Being a Python change, it also needs a gunicorn HUP, not just clear-cache.
+
+**`POS Settings` is a per-POS-Profile doctype, not a Single.** One row per profile in `tabPOS Settings` (queried by `{"pos_profile": ..., "enabled": 1}`); don't use `get_single_value`.
+
+**The frappe-ui Tailwind preset does not generate all color families.** `emerald`, `rose`, `indigo`, `sky`, `lime`, `fuchsia` classes silently produce nothing (invisible elements). Stick to: blue, green, violet, amber, pink, cyan, orange, teal, red, purple, yellow, gray. Verify with `grep -c '\.bg-<color>-100' pos_next/public/pos/assets/index-*.css` after build.
+
+**If /pos serves a blank page with 404s on hashed bundles after a build**, the Redis-cached `pos.html` references old asset hashes — run `bench --site <site> clear-website-cache`.
 
 **`filteredItems` fallback**: when `searchTerm` is set but `searchResults` is empty, the `itemSearch` store falls back to `allItems`. In scanner mode this causes the wrong cached item to be added on Enter. Guard the "add first result" path with `!scannerEnabled.value`.
 

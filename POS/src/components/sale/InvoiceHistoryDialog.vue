@@ -157,6 +157,7 @@ import {
 	formatCurrency as formatCurrencyUtil,
 } from "@/utils/currency"
 import { getInvoiceStatusColor } from "@/utils/invoice"
+import { useDialogSubmit } from "@/composables/useDialogSubmit"
 import { Button, Dialog, Input, createResource } from "frappe-ui"
 import { computed, ref, watch } from "vue"
 import ReturnInvoiceDialog from "./ReturnInvoiceDialog.vue"
@@ -196,6 +197,16 @@ const hasMore = ref(true)
 // Return dialog state
 const showReturnDialog = ref(false)
 const selectedInvoiceForReturn = ref(null)
+
+// Info/list dialog: Enter or Ctrl/Cmd+S closes it. Skip while the nested
+// return dialog is open (its search step isn't on the submit stack).
+useDialogSubmit({
+	isOpen: show,
+	onSubmit: () => {
+		show.value = false
+	},
+	canSubmit: () => !showReturnDialog.value,
+})
 
 // Track if we're loading more (appending) vs fresh load (replacing)
 const isLoadingMore = ref(false)

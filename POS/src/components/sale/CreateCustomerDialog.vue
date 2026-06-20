@@ -183,6 +183,7 @@
  * - Lazy loads countries data when dialog opens (not on app startup)
  */
 
+import { useDialogSubmit } from "@/composables/useDialogSubmit"
 import { usePOSPermissions } from "@/composables/usePermissions"
 import { useToast } from "@/composables/useToast"
 import { useCountriesStore } from "@/stores/countries"
@@ -248,6 +249,13 @@ const customerData = ref({
 const show = computed({
 	get: () => props.modelValue,
 	set: (val) => emit("update:modelValue", val),
+})
+
+// Enter or Ctrl/Cmd+S creates/updates the customer.
+useDialogSubmit({
+	isOpen: show,
+	onSubmit: () => handleCreate(),
+	canSubmit: () => !!customerData.value.customer_name && hasPermission.value,
 })
 
 const isEditMode = computed(() => !!props.customer?.name)

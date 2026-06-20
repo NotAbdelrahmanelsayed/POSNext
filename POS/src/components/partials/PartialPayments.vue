@@ -213,6 +213,7 @@ import {
 } from "@/utils/currency"
 import { getInvoiceStatusColor } from "@/utils/invoice"
 import PaymentDialog from "@/components/sale/PaymentDialog.vue"
+import { useDialogSubmit } from "@/composables/useDialogSubmit"
 import { usePOSSettingsStore } from "@/stores/posSettings"
 import { useToast } from "@/composables/useToast"
 import { useFormatters } from "@/composables/useFormatters"
@@ -246,6 +247,15 @@ const summary = ref({
 })
 const selectedInvoice = ref(null)
 const showPaymentDialog = ref(false)
+
+// Info/list dialog: Enter or Ctrl/Cmd+S closes it. The stack guard keeps this
+// inert while the nested payment dialog is on top.
+useDialogSubmit({
+	isOpen: show,
+	onSubmit: () => {
+		show.value = false
+	},
+})
 
 // Watchers
 watch(

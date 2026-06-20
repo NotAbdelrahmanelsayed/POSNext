@@ -289,6 +289,7 @@ import {
 } from "@/utils/printInvoice"
 import { Button, Dialog, call } from "frappe-ui"
 import { ref, watch, nextTick, computed } from "vue"
+import { useDialogSubmit } from "@/composables/useDialogSubmit"
 
 const log = logger.create("InvoiceDetailDialog")
 const { formatDate, formatTime } = useFormatters()
@@ -313,23 +314,31 @@ const show = ref(props.modelValue)
 const loading = ref(false)
 const invoiceData = ref(null)
 
+// Info dialog: Enter or Ctrl/Cmd+S simply closes it.
+useDialogSubmit({
+	isOpen: show,
+	onSubmit: () => {
+		show.value = false
+	},
+})
+
 // Computed: Check if this is a credit sale (Pay on Account - no payments, full outstanding)
 const isCreditSale = computed(() => {
 	if (!invoiceData.value) return false
-	const hasNoPayments =
-		!invoiceData.value.payments || invoiceData.value.payments.length === 0
+	const grandTotal = Math.abs(invoiceData.value.grand_total || 0)
+	const outstanding = Math.abs(invoiceData.value.outstanding_amount || 0)
+	// A settled invoice is never a credit sale, even if its payments table is
+	// empty (e.g. a credit sale later paid off, or paid via a means that does
+	// not populate the payments rows). The outstanding balance is the source
+	// of truth here, not the presence of payment rows.
+	if (outstanding < 0.01) return false
 	const totalPaid =
 		invoiceData.value.payments?.reduce(
 			(sum, p) => sum + Math.abs(p.amount || 0),
 			0,
 		) || 0
-	const grandTotal = Math.abs(invoiceData.value.grand_total || 0)
-	const outstanding = Math.abs(invoiceData.value.outstanding_amount || 0)
-	// Credit sale if no payments and outstanding equals grand total
-	return (
-		hasNoPayments ||
-		(totalPaid < 0.01 && Math.abs(outstanding - grandTotal) < 0.01)
-	)
+	// Credit sale if nothing was actually paid and the full amount is outstanding
+	return totalPaid < 0.01 && Math.abs(outstanding - grandTotal) < 0.01
 })
 
 // Computed: Check if this return was added to customer credit (no payments, negative outstanding)

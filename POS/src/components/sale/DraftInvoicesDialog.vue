@@ -167,6 +167,7 @@ import {
 } from "@/utils/currency"
 import { clearAllDrafts, deleteDraft, getAllDrafts } from "@/utils/draftManager"
 import { printInvoiceCustom } from "@/utils/printInvoice"
+import { useDialogSubmit } from "@/composables/useDialogSubmit"
 import { useToast } from "@/composables/useToast"
 import { usePOSShiftStore } from "@/stores/posShift"
 import { Button, Dialog } from "frappe-ui"
@@ -194,6 +195,16 @@ const drafts = ref([])
 const showDeleteDialog = ref(false)
 const showClearAllDialog = ref(false)
 const draftToDelete = ref(null)
+
+// Info/list dialog: Enter or Ctrl/Cmd+S closes it, unless a nested
+// delete/clear confirmation is currently open.
+useDialogSubmit({
+	isOpen: show,
+	onSubmit: () => {
+		show.value = false
+	},
+	canSubmit: () => !showDeleteDialog.value && !showClearAllDialog.value,
+})
 
 watch(
 	() => props.modelValue,
