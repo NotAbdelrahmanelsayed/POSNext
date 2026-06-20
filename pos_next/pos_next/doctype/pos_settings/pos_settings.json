@@ -36,6 +36,7 @@
   "hide_expected_amount",
   "display_discount_percentage",
   "display_discount_amount",
+  "show_buying_price",
   "show_variants_as_items",
   "cart_lifo",
   "section_break_operations",
@@ -299,6 +300,13 @@
    "fieldname": "display_discount_amount",
    "fieldtype": "Check",
    "label": "Display Discount Amount"
+  },
+  {
+   "default": "0",
+   "description": "Show item cost (valuation rate) in cart for System Managers and POS Managers only",
+   "fieldname": "show_buying_price",
+   "fieldtype": "Check",
+   "label": "Show Buying Price to Authorized Users"
   },
   {
    "default": "0",
@@ -590,7 +598,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-06-03 15:54:09.903964",
+ "modified": "2026-06-20 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "POS Next",
  "name": "POS Settings",

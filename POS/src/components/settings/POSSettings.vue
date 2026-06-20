@@ -1137,6 +1137,23 @@
 											</div>
 										</div>
 									</div>
+							</div>
+
+							<!-- Display Preferences -->
+								<div :class="displaySubsectionClasses.container">
+									<div class="flex items-center gap-2 mb-4">
+										<svg :class="displaySubsectionClasses.icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+										</svg>
+										<h4 class="text-sm font-semibold text-gray-900">{{ __('Display Preferences') }}</h4>
+									</div>
+									<div class="flex flex-col gap-3">
+										<CheckboxField
+											v-model="settings.show_buying_price"
+											:label="__('Show Buying Price to Authorized Users')"
+											:description="__('Displays item cost (valuation rate) in the cart. Only visible to System Managers and POS Managers.')"
+										/>
+									</div>
 								</div>
 							</div>
 						</div>
@@ -1180,41 +1197,49 @@
 </template>
 
 <script setup>
-import CheckboxField from "@/components/settings/CheckboxField.vue";
-import NumberField from "@/components/settings/NumberField.vue";
-import SelectField from "@/components/settings/SelectField.vue";
-import { useToast } from "@/composables/useToast";
-import { Button, call, createResource } from "frappe-ui";
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
-import { getSectionHeaderClasses, getSubsectionClasses, icons } from "./settingsConfig";
-import { offlineWorker } from "@/utils/offline/workerClient";
-import { logger } from "@/utils/logger";
-import { usePOSEvents } from "@/composables/usePOSEvents";
-import TranslatedHTML from "../common/TranslatedHTML.vue";
-import { useQzTray } from "@/composables/useQzTray";
-import { usePOSSettingsStore } from "@/stores/posSettings";
+import CheckboxField from "@/components/settings/CheckboxField.vue"
+import NumberField from "@/components/settings/NumberField.vue"
+import SelectField from "@/components/settings/SelectField.vue"
+import { useToast } from "@/composables/useToast"
+import { Button, call, createResource } from "frappe-ui"
+import { computed, onMounted, onUnmounted, ref, watch } from "vue"
+import {
+	getSectionHeaderClasses,
+	getSubsectionClasses,
+	icons,
+} from "./settingsConfig"
+import { offlineWorker } from "@/utils/offline/workerClient"
+import { logger } from "@/utils/logger"
+import { usePOSEvents } from "@/composables/usePOSEvents"
+import TranslatedHTML from "../common/TranslatedHTML.vue"
+import { useQzTray } from "@/composables/useQzTray"
+import { usePOSSettingsStore } from "@/stores/posSettings"
 
-const log = logger.create("POSSettings");
-const posSettingsStore = usePOSSettingsStore();
-const { detectSettingsChanges, updateSettingsSnapshot, emitStockSyncConfigured } = usePOSEvents();
-const { showSuccess, showError } = useToast();
+const log = logger.create("POSSettings")
+const posSettingsStore = usePOSSettingsStore()
+const {
+	detectSettingsChanges,
+	updateSettingsSnapshot,
+	emitStockSyncConfigured,
+} = usePOSEvents()
+const { showSuccess, showError } = useToast()
 
 const props = defineProps({
 	modelValue: Boolean,
 	posProfile: String,
 	currentWarehouse: String,
-});
+})
 
-const emit = defineEmits(["update:modelValue"]);
+const emit = defineEmits(["update:modelValue"])
 
-const show = ref(props.modelValue);
+const show = ref(props.modelValue)
 
 // State
-const activeTab = ref("stock");
-const loading = ref(true);
-const saving = ref(false);
-const warehousesList = ref([]);
-const selectedWarehouse = ref(props.currentWarehouse || "");
+const activeTab = ref("stock")
+const loading = ref(true)
+const saving = ref(false)
+const warehousesList = ref([])
+const selectedWarehouse = ref(props.currentWarehouse || "")
 const settings = ref({
 	pos_profile: props.posProfile || "",
 	enabled: 1,
@@ -1236,11 +1261,12 @@ const settings = ref({
 	allow_negative_stock: 0,
 	tax_inclusive: 0,
 	cart_lifo: 0,
-});
+	show_buying_price: 0,
+})
 
 // Stock Sync Settings (localStorage persisted)
-const stockSyncEnabled = ref(false);
-const stockSyncIntervalSeconds = ref(60); // Default 60 seconds
+const stockSyncEnabled = ref(false)
+const stockSyncIntervalSeconds = ref(60) // Default 60 seconds
 const stockSyncStatus = ref({
 	enabled: false,
 	warehouse: null,
@@ -1248,7 +1274,7 @@ const stockSyncStatus = ref({
 	intervalMs: 60000,
 	lastSync: null,
 	running: false,
-});
+})
 
 // QZ Tray composable
 const {
@@ -1265,25 +1291,30 @@ const {
 	refreshPrinters: handleRefreshPrinters,
 	generateCertificate: handleSetupQzCertificate,
 	downloadCertificate: handleDownloadQzCertificate,
-} = useQzTray();
+} = useQzTray()
 
 // Warehouse options
 const warehouseOptions = computed(() => {
-	if (warehousesList.value.length === 0) return [];
+	if (warehousesList.value.length === 0) return []
 	return warehousesList.value.map((w) => ({
 		label: w.warehouse_name || w.name,
 		value: w.name,
-	}));
-});
+	}))
+})
 
 // Dynamic classes using configuration helpers (DRY principle)
-const stockSectionClasses = computed(() => getSectionHeaderClasses("purple"));
-const salesSectionClasses = computed(() => getSectionHeaderClasses("green"));
-const warehouseSubsectionClasses = computed(() => getSubsectionClasses("gray"));
-const stockPolicySubsectionClasses = computed(() => getSubsectionClasses("blue"));
-const stockSyncSubsectionClasses = computed(() => getSubsectionClasses("indigo"));
-const pricingSubsectionClasses = computed(() => getSubsectionClasses("emerald"));
-const operationsSubsectionClasses = computed(() => getSubsectionClasses("teal"));
+const stockSectionClasses = computed(() => getSectionHeaderClasses("purple"))
+const salesSectionClasses = computed(() => getSectionHeaderClasses("green"))
+const warehouseSubsectionClasses = computed(() => getSubsectionClasses("gray"))
+const stockPolicySubsectionClasses = computed(() =>
+	getSubsectionClasses("blue"),
+)
+const stockSyncSubsectionClasses = computed(() =>
+	getSubsectionClasses("indigo"),
+)
+const pricingSubsectionClasses = computed(() => getSubsectionClasses("emerald"))
+const operationsSubsectionClasses = computed(() => getSubsectionClasses("teal"))
+const displaySubsectionClasses = computed(() => getSubsectionClasses("amber"))
 
 // Resources
 const warehousesResource = createResource({
@@ -1291,141 +1322,147 @@ const warehousesResource = createResource({
 	makeParams() {
 		return {
 			pos_profile: props.posProfile,
-		};
+		}
 	},
 	auto: false,
 	onSuccess(data) {
-		const warehouses = data?.message || data || [];
-		warehousesList.value = warehouses;
+		const warehouses = data?.message || data || []
+		warehousesList.value = warehouses
 	},
 	onError(error) {
-		warehousesList.value = [];
+		warehousesList.value = []
 	},
-});
+})
 
 // Track original allow_negative_stock value for detecting changes
-const originalAllowNegativeStock = ref(null);
+const originalAllowNegativeStock = ref(null)
 
 const settingsResource = createResource({
 	url: "pos_next.pos_next.doctype.pos_settings.pos_settings.get_pos_settings",
 	makeParams() {
 		return {
 			pos_profile: props.posProfile,
-		};
+		}
 	},
 	onSuccess(data) {
 		if (data) {
-			Object.assign(settings.value, data);
-			settings.value.pos_profile = props.posProfile;
+			Object.assign(settings.value, data)
+			settings.value.pos_profile = props.posProfile
 			// Store original value
-			originalAllowNegativeStock.value = data.allow_negative_stock;
+			originalAllowNegativeStock.value = data.allow_negative_stock
 			// Update event system snapshot
-			updateSettingsSnapshot(settings.value);
+			updateSettingsSnapshot(settings.value)
 		}
-		loading.value = false;
+		loading.value = false
 	},
 	onError(error) {
-		loading.value = false;
-		showError(__("Failed to load settings"));
+		loading.value = false
+		showError(__("Failed to load settings"))
 	},
-});
+})
 
 // Watchers
 watch(
 	() => props.modelValue,
 	(val) => {
-		show.value = val;
+		show.value = val
 		if (val) {
-			loadSettings();
+			loadSettings()
 		}
-	}
-);
+	},
+)
 
 watch(show, (val) => {
-	emit("update:modelValue", val);
-});
+	emit("update:modelValue", val)
+})
 
 // Watch for currentWarehouse prop changes and always sync
 watch(
 	() => props.currentWarehouse,
 	(newWarehouse) => {
 		if (newWarehouse) {
-			selectedWarehouse.value = newWarehouse;
+			selectedWarehouse.value = newWarehouse
 		}
 	},
-	{ immediate: true }
-);
+	{ immediate: true },
+)
 
 // Watch for tax_inclusive changes to provide immediate feedback
-const originalTaxInclusive = ref(null);
+const originalTaxInclusive = ref(null)
 watch(
 	() => settings.value.tax_inclusive,
 	(newValue, oldValue) => {
 		// Store original value on first load
 		if (originalTaxInclusive.value === null && oldValue !== undefined) {
-			originalTaxInclusive.value = oldValue;
+			originalTaxInclusive.value = oldValue
 		}
 
 		// Only show feedback if value actually changed from original
-		if (originalTaxInclusive.value !== null && newValue !== originalTaxInclusive.value) {
-			const mode = newValue ? "inclusive" : "exclusive";
-			log.info(`Tax mode toggled to: ${mode}`);
+		if (
+			originalTaxInclusive.value !== null &&
+			newValue !== originalTaxInclusive.value
+		) {
+			const mode = newValue ? "inclusive" : "exclusive"
+			log.info(`Tax mode toggled to: ${mode}`)
 		}
-	}
-);
+	},
+)
 
 // Methods
 function handleClose() {
-	show.value = false;
+	show.value = false
 }
 
 async function loadSettings() {
-	if (!props.posProfile) return;
-	loading.value = true;
-	settings.value.pos_profile = props.posProfile;
+	if (!props.posProfile) return
+	loading.value = true
+	settings.value.pos_profile = props.posProfile
 
 	// Always set the current warehouse from props (from current shift/profile)
-	selectedWarehouse.value = props.currentWarehouse || "";
+	selectedWarehouse.value = props.currentWarehouse || ""
 
 	try {
 		// Load warehouses first using call API directly
-		const warehousesData = await call("pos_next.api.pos_profile.get_warehouses", {
-			pos_profile: props.posProfile,
-		});
+		const warehousesData = await call(
+			"pos_next.api.pos_profile.get_warehouses",
+			{
+				pos_profile: props.posProfile,
+			},
+		)
 
 		// Handle frappe-ui call response format { message: [...] }
-		warehousesList.value = warehousesData?.message || warehousesData || [];
+		warehousesList.value = warehousesData?.message || warehousesData || []
 
 		// Load settings
-		settingsResource.reload();
+		settingsResource.reload()
 	} catch (error) {
-		log.error("Error loading warehouses:", error);
-		warehousesList.value = [];
+		log.error("Error loading warehouses:", error)
+		warehousesList.value = []
 		// Still load settings even if warehouses fail
-		settingsResource.reload();
+		settingsResource.reload()
 	}
 }
 
 async function saveSettings() {
 	if (!props.posProfile) {
-		showError(__("POS Profile not found"));
-		return;
+		showError(__("POS Profile not found"))
+		return
 	}
 
-	saving.value = true;
-	const oldWarehouse = props.currentWarehouse;
-	const warehouseChanged = selectedWarehouse.value !== oldWarehouse;
+	saving.value = true
+	const oldWarehouse = props.currentWarehouse
+	const warehouseChanged = selectedWarehouse.value !== oldWarehouse
 	const negativeStockChanged =
-		originalAllowNegativeStock.value !== settings.value.allow_negative_stock;
+		originalAllowNegativeStock.value !== settings.value.allow_negative_stock
 	const taxInclusiveChanged =
 		originalTaxInclusive.value !== null &&
-		originalTaxInclusive.value !== settings.value.tax_inclusive;
+		originalTaxInclusive.value !== settings.value.tax_inclusive
 
 	// Capture old settings for change detection
 	const oldSettings = {
 		...settings.value,
 		warehouse: oldWarehouse, // Include warehouse in change detection
-	};
+	}
 
 	try {
 		// Save POS Settings (without warehouse)
@@ -1434,39 +1471,42 @@ async function saveSettings() {
 			{
 				pos_profile: props.posProfile,
 				settings: settings.value,
-			}
-		);
+			},
+		)
 
 		if (result) {
-			Object.assign(settings.value, result);
-			settings.value.pos_profile = props.posProfile;
+			Object.assign(settings.value, result)
+			settings.value.pos_profile = props.posProfile
 			// Update original values after successful save
-			originalAllowNegativeStock.value = result.allow_negative_stock;
-			originalTaxInclusive.value = result.tax_inclusive;
+			originalAllowNegativeStock.value = result.allow_negative_stock
+			originalTaxInclusive.value = result.tax_inclusive
 			// Sync show_invoice_success_dialog to posSettingsStore immediately (no page reload needed)
 			if ("show_invoice_success_dialog" in result) {
 				posSettingsStore.settings.show_invoice_success_dialog =
-					result.show_invoice_success_dialog;
+					result.show_invoice_success_dialog
 			}
 		}
 
 		// Update warehouse in POS Profile if changed
 		if (warehouseChanged && selectedWarehouse.value) {
-			const warehouseResult = await call("pos_next.api.pos_profile.update_warehouse", {
-				pos_profile: props.posProfile,
-				warehouse: selectedWarehouse.value,
-			});
+			const warehouseResult = await call(
+				"pos_next.api.pos_profile.update_warehouse",
+				{
+					pos_profile: props.posProfile,
+					warehouse: selectedWarehouse.value,
+				},
+			)
 
 			if (warehouseResult && warehouseResult.success) {
 				// Add warehouse to new settings for change detection
 				// (detectSettingsChanges below will emit settings:warehouse-changed via event bus)
-				settings.value.warehouse = selectedWarehouse.value;
+				settings.value.warehouse = selectedWarehouse.value
 			}
 		}
 
 		// Detect and emit settings changes through event system
 		// This will notify all listeners (POSSale, stock store, cart store, etc.)
-		detectSettingsChanges(settings.value, oldSettings);
+		detectSettingsChanges(settings.value, oldSettings)
 
 		// IMPORTANT: Page reload for critical stock policy change
 		// The allow_negative_stock setting affects deep stock validation logic
@@ -1478,31 +1518,37 @@ async function saveSettings() {
 		// prevents inconsistent state. Event listeners are still notified
 		// before reload for any cleanup needed.
 		if (negativeStockChanged) {
-			log.info("Stock policy changed, reloading page for consistency...");
-			window.location.reload();
-			return;
+			log.info("Stock policy changed, reloading page for consistency...")
+			window.location.reload()
+			return
 		}
 
 		// Show success toast for other changes
-		let successMessage = __("Settings saved successfully");
+		let successMessage = __("Settings saved successfully")
 		if (warehouseChanged && taxInclusiveChanged) {
 			successMessage = __(
-				"Settings saved, warehouse updated, and tax mode changed. Cart will be recalculated."
-			);
+				"Settings saved, warehouse updated, and tax mode changed. Cart will be recalculated.",
+			)
 		} else if (warehouseChanged) {
-			successMessage = __("Settings saved and warehouse updated. Reloading stock...");
+			successMessage = __(
+				"Settings saved and warehouse updated. Reloading stock...",
+			)
 		} else if (taxInclusiveChanged) {
 			successMessage = settings.value.tax_inclusive
-				? __('Settings saved. Tax mode is now "inclusive". Cart will be recalculated.')
-				: __('Settings saved. Tax mode is now "exclusive". Cart will be recalculated.');
+				? __(
+						'Settings saved. Tax mode is now "inclusive". Cart will be recalculated.',
+					)
+				: __(
+						'Settings saved. Tax mode is now "exclusive". Cart will be recalculated.',
+					)
 		}
 
-		showSuccess(successMessage);
+		showSuccess(successMessage)
 	} catch (error) {
-		log.error("Error saving settings:", error);
-		showError(error.message || __("Failed to save settings"));
+		log.error("Error saving settings:", error)
+		showError(error.message || __("Failed to save settings"))
 	} finally {
-		saving.value = false;
+		saving.value = false
 	}
 }
 
@@ -1511,10 +1557,10 @@ watch(
 	() => settings.value.silent_print,
 	async (enabled) => {
 		if (enabled) {
-			await handleQzConnect();
+			await handleQzConnect()
 		}
-	}
-);
+	},
+)
 
 // ============================================================================
 // STOCK SYNC FUNCTIONS
@@ -1523,14 +1569,14 @@ watch(
 // Load stock sync settings from localStorage
 function loadStockSyncSettings() {
 	try {
-		const saved = localStorage.getItem("pos_stock_sync_settings");
+		const saved = localStorage.getItem("pos_stock_sync_settings")
 		if (saved) {
-			const parsed = JSON.parse(saved);
-			stockSyncEnabled.value = parsed.enabled ?? false;
-			stockSyncIntervalSeconds.value = parsed.intervalSeconds ?? 60;
+			const parsed = JSON.parse(saved)
+			stockSyncEnabled.value = parsed.enabled ?? false
+			stockSyncIntervalSeconds.value = parsed.intervalSeconds ?? 60
 		}
 	} catch (error) {
-		log.error("Failed to load stock sync settings:", error);
+		log.error("Failed to load stock sync settings:", error)
 	}
 }
 
@@ -1542,101 +1588,101 @@ function saveStockSyncSettings() {
 			JSON.stringify({
 				enabled: stockSyncEnabled.value,
 				intervalSeconds: stockSyncIntervalSeconds.value,
-			})
-		);
+			}),
+		)
 	} catch (error) {
-		log.error("Failed to save stock sync settings:", error);
+		log.error("Failed to save stock sync settings:", error)
 	}
 }
 
 // Update stock sync status
 async function updateStockSyncStatus() {
 	try {
-		const status = await offlineWorker.getStockSyncStatus();
-		stockSyncStatus.value = status;
+		const status = await offlineWorker.getStockSyncStatus()
+		stockSyncStatus.value = status
 	} catch (error) {
-		log.error("Failed to get stock sync status:", error);
+		log.error("Failed to get stock sync status:", error)
 	}
 }
 
 // Apply stock sync configuration to worker
 async function applyStockSyncConfig() {
 	try {
-		const intervalMs = stockSyncIntervalSeconds.value * 1000;
+		const intervalMs = stockSyncIntervalSeconds.value * 1000
 
 		if (stockSyncEnabled.value) {
 			// Configure and start sync
 			await offlineWorker.configureStockSync({
 				intervalMs,
-			});
-			await offlineWorker.startStockSync();
+			})
+			await offlineWorker.startStockSync()
 		} else {
 			// Stop sync
-			await offlineWorker.stopStockSync();
+			await offlineWorker.stopStockSync()
 		}
 
 		// Update status
-		await updateStockSyncStatus();
+		await updateStockSyncStatus()
 
 		// Save to localStorage
-		saveStockSyncSettings();
+		saveStockSyncSettings()
 
 		// Emit sync configuration change event
 		emitStockSyncConfigured({
 			enabled: stockSyncEnabled.value,
 			intervalMs: intervalMs,
-		});
+		})
 	} catch (error) {
-		log.error("Failed to apply stock sync config:", error);
+		log.error("Failed to apply stock sync config:", error)
 	}
 }
 
 // Format sync time for display
 function formatSyncTime(timestamp) {
-	if (!timestamp) return __("Never");
+	if (!timestamp) return __("Never")
 
-	const now = Date.now();
-	const diff = now - timestamp;
+	const now = Date.now()
+	const diff = now - timestamp
 
 	if (diff < 60000) {
-		return __("{0}s ago", [Math.floor(diff / 1000)]);
+		return __("{0}s ago", [Math.floor(diff / 1000)])
 	} else if (diff < 3600000) {
-		return __("{0}m ago", [Math.floor(diff / 60000)]);
+		return __("{0}m ago", [Math.floor(diff / 60000)])
 	} else {
-		const date = new Date(timestamp);
-		return date.toLocaleTimeString();
+		const date = new Date(timestamp)
+		return date.toLocaleTimeString()
 	}
 }
 
 // Watch for changes and apply
 watch(stockSyncEnabled, () => {
-	applyStockSyncConfig();
-});
+	applyStockSyncConfig()
+})
 
 watch(stockSyncIntervalSeconds, () => {
 	if (stockSyncEnabled.value) {
-		applyStockSyncConfig();
+		applyStockSyncConfig()
 	}
-});
+})
 
 // Lifecycle hooks
 onMounted(async () => {
 	// Load settings
-	loadStockSyncSettings();
+	loadStockSyncSettings()
 
 	// Update status initially
-	await updateStockSyncStatus();
+	await updateStockSyncStatus()
 
 	// Poll status every 5 seconds
 	const statusInterval = setInterval(() => {
-		updateStockSyncStatus();
-	}, 5000);
+		updateStockSyncStatus()
+	}, 5000)
 
 	// Cleanup on unmount
 	onUnmounted(() => {
-		clearInterval(statusInterval);
-	});
-});
+		clearInterval(statusInterval)
+	})
+})
 </script>
 
 <style scoped>

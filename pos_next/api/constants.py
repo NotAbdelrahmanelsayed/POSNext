@@ -44,6 +44,7 @@ POS_SETTINGS_FIELDS = [
 	"enable_idle_refocus",
 	"idle_refocus_seconds",
 	"customer_search_show_all",
+	"show_buying_price",
 ]
 
 # Default POS Settings values
@@ -79,4 +80,5 @@ DEFAULT_POS_SETTINGS = {
 	"enable_idle_refocus": 1,
 	"idle_refocus_seconds": 3,
 	"customer_search_show_all": 0,
+	"show_buying_price": 0,
 }

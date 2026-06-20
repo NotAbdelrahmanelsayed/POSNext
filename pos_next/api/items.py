@@ -26,6 +26,7 @@ ITEM_RESULT_FIELDS = [
 	"has_variants",
 	"variant_of",
 	"disabled",
+	"valuation_rate",
 ]
 
 ITEM_RESULT_COLUMNS = ",\n\t".join(ITEM_RESULT_FIELDS)
@@ -253,7 +254,7 @@ def get_item_detail(item, doc=None, warehouse=None, price_list=None, company=Non
 	# Fetch all needed Item fields in a single query (performance optimization)
 	item_data = (
 		frappe.db.get_value(
-			"Item", item_code, ["max_discount", "item_group", "brand", "stock_uom"], as_dict=True
+			"Item", item_code, ["max_discount", "item_group", "brand", "stock_uom", "valuation_rate"], as_dict=True
 		)
 		or {}
 	)
@@ -279,6 +280,19 @@ def get_item_detail(item, doc=None, warehouse=None, price_list=None, company=Non
 		res["actual_qty"] = get_stock_availability(item_code, warehouse)
 
 	res["max_discount"] = item_data.get("max_discount")
+	buying_price = frappe.db.get_value(
+		"Item Price",
+		{"item_code": item_code, "buying": 1},
+		"price_list_rate",
+	)
+	if buying_price:
+		res["valuation_rate"] = flt(buying_price)
+	else:
+		valuation_rate = flt(item_data.get("valuation_rate"))
+		if not valuation_rate and warehouse:
+			bin_val = frappe.db.get_value("Bin", {"item_code": item_code, "warehouse": warehouse}, "valuation_rate")
+			valuation_rate = flt(bin_val)
+		res["valuation_rate"] = valuation_rate
 	res["batch_no_data"] = batch_no_data
 	res["serial_no_data"] = serial_no_data
 	res["item_group"] = item_data.get("item_group")
@@ -1305,18 +1319,39 @@ def get_items(
 
 		# Batch query stock for all items at once using Query Builder
 		stock_map = {}
+		valuation_rate_map = {}
 		if item_codes and pos_profile_doc.warehouse:
 			stock_items = [item["item_code"] for item in items if item.get("is_stock_item")]
 			if stock_items:
 				Bin = DocType("Bin")
 				stocks = (
 					frappe.qb.from_(Bin)
-					.select(Bin.item_code, Bin.actual_qty)
+					.select(
+						Bin.item_code,
+						Bin.actual_qty,
+						Bin.valuation_rate,
+					)
 					.where(Bin.item_code.isin(stock_items))
 					.where(Bin.warehouse == pos_profile_doc.warehouse)
 					.run(as_dict=True)
 				)
 				stock_map = {s["item_code"]: s["actual_qty"] for s in stocks}
+				valuation_rate_map = {s["item_code"]: flt(s["valuation_rate"]) for s in stocks}
+
+		# Batch query buying prices from Item Price (buying=1) for all items
+		buying_price_map = {}
+		if item_codes:
+			ItemPriceTbl = DocType("Item Price")
+			buying_prices = (
+				frappe.qb.from_(ItemPriceTbl)
+				.select(ItemPriceTbl.item_code, ItemPriceTbl.price_list_rate)
+				.where(ItemPriceTbl.item_code.isin(item_codes))
+				.where(ItemPriceTbl.buying == 1)
+				.run(as_dict=True)
+			)
+			for bp in buying_prices:
+				if bp["item_code"] not in buying_price_map:
+					buying_price_map[bp["item_code"]] = flt(bp["price_list_rate"])
 
 		# ===================================================================
 		# PRODUCT BUNDLE AVAILABILITY: Calculate bundle stock (bulk optimized)
@@ -1462,6 +1497,13 @@ def get_items(
 				if item.get("is_stock_item")
 				else bundle_availability_map.get(item["item_code"], 0)
 			)
+
+			# Buying price: Item Price (buying=1) → Bin valuation_rate → Item.valuation_rate
+			item_code_key = item["item_code"]
+			if item_code_key in buying_price_map:
+				item["valuation_rate"] = buying_price_map[item_code_key]
+			elif not item.get("valuation_rate") and item.get("is_stock_item"):
+				item["valuation_rate"] = valuation_rate_map.get(item_code_key, 0)
 
 			# ===================================================================
 			# BUNDLE MARKER: Flag items that are Product Bundles
