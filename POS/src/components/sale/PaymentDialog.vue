@@ -1121,7 +1121,7 @@
 							]"
 						>
 							<button
-								v-for="method in filteredPaymentMethods"
+								v-for="(method, index) in filteredPaymentMethods"
 								:key="method.mode_of_payment"
 								@pointerdown="onPaymentMethodDown(method, $event)"
 								@pointerup="onPaymentMethodUp(method)"
@@ -1156,6 +1156,13 @@
 								<span class="truncate max-w-[80px] lg:max-w-none">{{
 									__(method.mode_of_payment)
 								}}</span>
+								<kbd
+									v-if="index < 9"
+									:class="[
+										'font-mono leading-none rounded border select-none opacity-60',
+										isSmallMobile ? 'text-[7px] px-0.5 py-px border-current' : 'text-[9px] px-1 py-px border-current'
+									]"
+								>Alt+{{ index + 1 }}</kbd>
 								<!-- Wallet Balance Badge -->
 								<span
 									v-if="
@@ -2028,7 +2035,7 @@ import { getPaymentIcon } from "@/utils/payment";
 import { offlineWorker } from "@/utils/offline/workerClient";
 import { logger } from "@/utils/logger";
 import { Dialog, createResource, call } from "frappe-ui";
-import { computed, ref, watch, nextTick } from "vue";
+import { computed, ref, watch, nextTick, onMounted, onUnmounted } from "vue";
 import { useToast } from "@/composables/useToast";
 import { useLongPress } from "@/composables/useLongPress";
 import { usePaymentNumpad } from "@/composables/usePaymentNumpad";
@@ -2220,6 +2227,27 @@ function handleNumpadEnter(value) {
 		completePayment();
 	}
 }
+
+function handlePaymentMethodShortcut(event) {
+	if (!props.modelValue) return;
+	if (!event.altKey) return;
+	const digit = Number.parseInt(event.key, 10);
+	if (Number.isNaN(digit) || digit < 1 || digit > 9) return;
+	if (remainingAmount.value <= 0) return;
+	const method = filteredPaymentMethods.value[digit - 1];
+	if (!method) return;
+	if (
+		isWalletPaymentMethod(method.mode_of_payment) &&
+		availableWalletBalance.value <= 0 &&
+		getMethodTotal(method.mode_of_payment) === 0
+	) return;
+	event.preventDefault();
+	lastSelectedMethod.value = method;
+	addCustomPayment(method, remainingAmount.value);
+}
+
+onMounted(() => window.addEventListener("keydown", handlePaymentMethodShortcut));
+onUnmounted(() => window.removeEventListener("keydown", handlePaymentMethodShortcut));
 
 // Use numpad composable for keypad input handling with keyboard support
 const { numpadDisplay, numpadValue, numpadInput, numpadBackspace, numpadClear, setNumpadValue } =

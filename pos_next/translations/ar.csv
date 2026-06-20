@@ -1618,3 +1618,8 @@ Points applied: {0}. Please pay remaining {1} with {2},تم خصم النقاط:
 "Show item cost (valuation rate) in cart for System Managers and POS Managers only","عرض تكلفة الصنف (معدل التقييم) في السلة لمديري النظام ومديري نقطة البيع فقط",""
 "left","متبقي",""
 "Available stock in warehouse","المخزون المتاح في المستودع",""
+"Add to Cart","أضف إلى السلة",""
+"Edit Quantity","تعديل الكمية",""
+"Enter quantity:","أدخل الكمية:",""
+"Update quantity:","تحديث الكمية:",""
+"{0} quantity updated","تم تحديث كمية {0}",""

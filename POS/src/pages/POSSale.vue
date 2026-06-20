@@ -1276,7 +1276,9 @@ onMounted(async () => {
 		if (uiStore.isAnyDialogOpen) return;
 		const tag = document.activeElement?.tagName;
 		const isFunctionKey = event.key.startsWith("F") && !isNaN(event.key.slice(1));
-		if (!isFunctionKey && (tag === "INPUT" || tag === "TEXTAREA")) return;
+		const isAltDigit = event.altKey && event.key >= "1" && event.key <= "5";
+		const isAltQ = event.altKey && (event.key === "q" || event.key === "Q");
+		if (!isFunctionKey && !isAltDigit && !isAltQ && (tag === "INPUT" || tag === "TEXTAREA")) return;
 
 		if (event.key === "F4") {
 			event.preventDefault();
@@ -1287,6 +1289,21 @@ onMounted(async () => {
 		} else if (event.key === "F9") {
 			event.preventDefault();
 			handleProceedToPayment();
+		} else if (isAltDigit && itemStore.searchTerm?.trim() && itemStore.filteredItems?.length) {
+			const idx = parseInt(event.key) - 1;
+			const item = itemStore.filteredItems[idx];
+			if (item) {
+				event.preventDefault();
+				handleItemSelected(item);
+				itemsSelectorRef.value?.clearSearchAndResetInput();
+			}
+		} else if (isAltQ && cartStore.invoiceItems.length > 0) {
+			const lastItem = cartStore.invoiceItems[cartStore.invoiceItems.length - 1];
+			if (lastItem && !lastItem.is_free_item) {
+				event.preventDefault();
+				cartStore.setPendingItem(lastItem, lastItem.quantity, "cart-edit");
+				uiStore.showItemSelectionDialog = true;
+			}
 		}
 	};
 	window.addEventListener("keydown", handleGlobalKeydown);
@@ -1980,9 +1997,18 @@ function handleItemSelected(item, autoAdd = false) {
 		return;
 	}
 
+	// Scanner-only mode (scanner ON, auto-add OFF): show quantity dialog before adding
+	const scannerOnly = itemsSelectorRef.value?.scannerEnabled && !itemsSelectorRef.value?.autoAddEnabled;
+	if (!autoAdd && scannerOnly) {
+		cartStore.setPendingItem(item, 1, "simple");
+		uiStore.showItemSelectionDialog = true;
+		return;
+	}
+
 	// Add to cart
 	try {
 		cartStore.addItem(item, 1, false, shiftStore.currentProfile);
+		itemsSelectorRef.value?.clearSearchAndResetInput();
 	} catch (error) {
 		uiStore.showError(
 			__("Insufficient Stock"),
@@ -2421,6 +2447,30 @@ async function handleOptionSelected(option) {
 				} catch (error) {
 					showError(error.message);
 				}
+			}
+		} else if (option.type === "simple") {
+			const qty = option.quantity || cartStore.pendingItemQty;
+			const itemName = cartStore.pendingItem?.item_name;
+			try {
+				cartStore.addItem(cartStore.pendingItem, qty, false, shiftStore.currentProfile);
+				uiStore.showItemSelectionDialog = false;
+				cartStore.clearPendingItem();
+				itemsSelectorRef.value?.clearSearchAndResetInput();
+				showSuccess(__("{0} added to cart", [itemName]));
+			} catch (error) {
+				showError(error.message);
+			}
+		} else if (option.type === "cart-edit") {
+			const qty = option.quantity || cartStore.pendingItemQty;
+			const item = cartStore.pendingItem;
+			const itemName = item?.item_name;
+			try {
+				cartStore.updateItemQuantity(item.item_code, qty, item.uom);
+				uiStore.showItemSelectionDialog = false;
+				cartStore.clearPendingItem();
+				showSuccess(__("{0} quantity updated", [itemName]));
+			} catch (error) {
+				showError(error.message);
 			}
 		}
 	} catch (error) {

@@ -421,7 +421,7 @@
 					class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-1.5 sm:gap-2.5"
 				>
 					<div
-						v-for="item in displayedItems"
+						v-for="(item, index) in displayedItems"
 						:key="item.item_code"
 						@touchstart.passive="getOptimizedClickHandler(item).touchstart"
 						@touchmove.passive="getOptimizedClickHandler(item).touchmove"
@@ -561,6 +561,13 @@
 									}}</span
 								>
 							</p>
+						</div>
+						<!-- Alt+N shortcut badge (only when search is active and index < 5) -->
+						<div
+							v-if="index < 5 && searchTerm?.trim()"
+							class="absolute bottom-1 start-1 text-[9px] font-mono bg-gray-800/65 text-white rounded px-1 py-0.5 leading-none pointer-events-none select-none"
+						>
+							alt+{{ index + 1 }}
 						</div>
 					</div>
 				</div>
@@ -744,7 +751,7 @@
 					</thead>
 					<tbody class="bg-white divide-y divide-gray-200">
 						<tr
-							v-for="item in displayedItems"
+							v-for="(item, index) in displayedItems"
 							:key="item.item_code"
 							@touchstart.passive="getOptimizedClickHandler(item).touchstart"
 							@touchmove.passive="getOptimizedClickHandler(item).touchmove"
@@ -799,11 +806,17 @@
 							<td
 								class="px-2 sm:px-3 py-2 max-w-[120px] sm:max-w-[180px] md:max-w-[200px]"
 							>
-								<div
-									class="text-xs sm:text-sm font-medium text-gray-900 truncate"
-									:title="item.item_name"
-								>
-									{{ item.item_name }}
+								<div class="flex items-center gap-1.5">
+									<div
+										class="text-xs sm:text-sm font-medium text-gray-900 truncate"
+										:title="item.item_name"
+									>
+										{{ item.item_name }}
+									</div>
+									<span
+										v-if="index < 5 && searchTerm?.trim()"
+										class="shrink-0 text-[9px] font-mono bg-gray-800/65 text-white rounded px-1 py-0.5 leading-none select-none"
+									>alt+{{ index + 1 }}</span>
 								</div>
 								<div
 									v-if="item.attributes"
@@ -1467,6 +1480,9 @@ defineExpose({
 	loadItemGroups: () => itemStore.loadItemGroups(),
 	loadMoreItems: () => itemStore.loadMoreItems(),
 	focusSearchInput,
+	clearSearchAndResetInput,
+	scannerEnabled,
+	autoAddEnabled,
 });
 
 // Watch for view mode changes and rebind scroll listeners

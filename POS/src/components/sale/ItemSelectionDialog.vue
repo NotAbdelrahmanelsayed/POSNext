@@ -269,6 +269,120 @@
 					</p>
 				</div>
 
+				<!-- Simple Mode: quantity-only (scanner mode, no variants/UOM) -->
+				<div v-else-if="mode === 'simple'" class="flex flex-col gap-4">
+					<!-- Quantity Control -->
+					<div>
+						<label class="block text-sm font-medium text-gray-700 mb-2 text-start">{{ __('Quantity') }}</label>
+						<div class="w-full h-10 border border-gray-300 rounded-lg bg-white flex items-center overflow-hidden">
+							<button
+								type="button"
+								@click="decrementQuantity"
+								class="w-[40px] h-[40px] min-w-[40px] bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-700 font-bold text-lg transition-colors flex items-center justify-center border-e border-gray-300 touch-manipulation"
+								style="flex: 0 0 40px;"
+							>−</button>
+							<div class="flex-1 h-full flex items-center justify-center px-3">
+								<input
+									ref="quantityInput"
+									v-model.number="quantity"
+									type="number"
+									min="1"
+									step="1"
+									inputmode="numeric"
+									class="w-full text-center border-0 text-sm font-semibold focus:outline-none focus:ring-0 bg-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+									@blur="validateQuantity"
+									@keydown.enter="confirm"
+								/>
+							</div>
+							<button
+								type="button"
+								@click="incrementQuantity"
+								class="w-[40px] h-[40px] min-w-[40px] bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-700 font-bold text-lg transition-colors flex items-center justify-center border-s border-gray-300 touch-manipulation"
+								style="flex: 0 0 40px;"
+							>+</button>
+						</div>
+						<div class="flex gap-2 mt-3">
+							<button
+								v-for="qty in [1, 5, 10, 20]"
+								:key="qty"
+								@click="quantity = qty"
+								:class="[
+									'flex-1 py-3 rounded-xl text-sm font-bold transition-all touch-manipulation',
+									quantity === qty ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 active:bg-gray-300'
+								]"
+							>{{ qty }}</button>
+						</div>
+					</div>
+					<div class="bg-blue-50 rounded-xl p-4 flex items-center justify-between">
+						<div>
+							<p class="text-sm text-gray-600">{{ __('Total') }}</p>
+							<p class="text-xs text-gray-500">{{ quantity }} × {{ formatCurrency(item?.rate || item?.price_list_rate || 0) }}</p>
+						</div>
+						<p class="text-2xl font-bold text-blue-600">{{ formatCurrency((item?.rate || item?.price_list_rate || 0) * quantity) }}</p>
+					</div>
+					<p v-if="stockWarning" class="text-xs text-orange-600 flex items-center justify-center gap-1 bg-orange-50 rounded-lg p-2">
+						<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+						{{ stockWarning }}
+					</p>
+				</div>
+
+				<!-- Cart-Edit Mode: quantity-only for existing cart items -->
+				<div v-else-if="mode === 'cart-edit'" class="flex flex-col gap-4">
+					<!-- Quantity Control -->
+					<div>
+						<label class="block text-sm font-medium text-gray-700 mb-2 text-start">{{ __('Quantity') }}</label>
+						<div class="w-full h-10 border border-gray-300 rounded-lg bg-white flex items-center overflow-hidden">
+							<button
+								type="button"
+								@click="decrementQuantity"
+								class="w-[40px] h-[40px] min-w-[40px] bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-700 font-bold text-lg transition-colors flex items-center justify-center border-e border-gray-300 touch-manipulation"
+								style="flex: 0 0 40px;"
+							>−</button>
+							<div class="flex-1 h-full flex items-center justify-center px-3">
+								<input
+									ref="quantityInput"
+									v-model.number="quantity"
+									type="number"
+									min="1"
+									step="1"
+									inputmode="numeric"
+									class="w-full text-center border-0 text-sm font-semibold focus:outline-none focus:ring-0 bg-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+									@blur="validateQuantity"
+									@keydown.enter="confirm"
+								/>
+							</div>
+							<button
+								type="button"
+								@click="incrementQuantity"
+								class="w-[40px] h-[40px] min-w-[40px] bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-700 font-bold text-lg transition-colors flex items-center justify-center border-s border-gray-300 touch-manipulation"
+								style="flex: 0 0 40px;"
+							>+</button>
+						</div>
+						<div class="flex gap-2 mt-3">
+							<button
+								v-for="qty in [1, 5, 10, 20]"
+								:key="qty"
+								@click="quantity = qty"
+								:class="[
+									'flex-1 py-3 rounded-xl text-sm font-bold transition-all touch-manipulation',
+									quantity === qty ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 active:bg-gray-300'
+								]"
+							>{{ qty }}</button>
+						</div>
+					</div>
+					<div class="bg-blue-50 rounded-xl p-4 flex items-center justify-between">
+						<div>
+							<p class="text-sm text-gray-600">{{ __('Total') }}</p>
+							<p class="text-xs text-gray-500">{{ quantity }} × {{ formatCurrency(item?.rate || item?.price_list_rate || 0) }}</p>
+						</div>
+						<p class="text-2xl font-bold text-blue-600">{{ formatCurrency((item?.rate || item?.price_list_rate || 0) * quantity) }}</p>
+					</div>
+					<p v-if="stockWarning" class="text-xs text-orange-600 flex items-center justify-center gap-1 bg-orange-50 rounded-lg p-2">
+						<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+						{{ stockWarning }}
+					</p>
+				</div>
+
 				<!-- No Options -->
 				<div v-else class="text-center py-8">
 					<div
@@ -401,13 +515,17 @@ const quantityInput = ref(null);
 
 // Computed properties for dialog customization
 const dialogTitle = computed(() => {
-	return props.mode === "variant" ? __("Select Item Variant") : __("Select Unit of Measure");
+	if (props.mode === "variant") return __("Select Item Variant");
+	if (props.mode === "simple") return __("Add to Cart");
+	if (props.mode === "cart-edit") return __("Edit Quantity");
+	return __("Select Unit of Measure");
 });
 
 const dialogDescription = computed(() => {
-	return props.mode === "variant"
-		? __("Choose a variant of this item:")
-		: __("Select the unit of measure for this item:");
+	if (props.mode === "variant") return __("Choose a variant of this item:");
+	if (props.mode === "simple") return __("Enter quantity:");
+	if (props.mode === "cart-edit") return __("Update quantity:");
+	return __("Select the unit of measure for this item:");
 });
 
 const confirmButtonText = computed(() => {
@@ -416,6 +534,17 @@ const confirmButtonText = computed(() => {
 
 // Computed: Stock warning when quantity exceeds available stock
 const stockWarning = computed(() => {
+	if (props.mode === "simple" || props.mode === "cart-edit") {
+		const availableStock = props.item?.actual_qty ?? props.item?.stock_qty ?? null;
+		if (availableStock !== null && quantity.value > availableStock) {
+			return __("Requested quantity ({0}) exceeds available stock ({1})", [
+				quantity.value,
+				Math.floor(availableStock),
+			]);
+		}
+		return null;
+	}
+
 	if (props.mode !== "uom" || !selectedOption.value) return null;
 
 	const availableStock =
@@ -561,7 +690,7 @@ watch(
 		if (isOpen && props.item) {
 			loadOptions();
 		}
-		if (isOpen && props.mode === "uom") {
+		if (isOpen && (props.mode === "uom" || props.mode === "simple" || props.mode === "cart-edit")) {
 			nextTick(() => {
 				setTimeout(() => {
 					quantityInput.value?.focus();
@@ -580,9 +709,16 @@ watch([() => props.mode, () => props.item], ([, newItem]) => {
 });
 
 /**
- * Load options based on mode (variant or UOM)
+ * Load options based on mode (variant, uom, or simple)
  */
 async function loadOptions() {
+	if (props.mode === "simple" || props.mode === "cart-edit") {
+		selectedOption.value = { type: props.mode };
+		quantity.value = props.item?.resolved_qty || 1;
+		loading.value = false;
+		return;
+	}
+
 	selectedOption.value = null;
 	quantity.value = props.item.resolved_qty || 1;
 	selectedAttributes.value = {}; // Reset attribute selection
@@ -702,7 +838,7 @@ function confirm() {
 		// Emit first, let parent decide if dialog should close
 		// Parent can keep dialog open by switching mode (variant → UOM)
 		const option = { ...selectedOption.value };
-		if (props.mode === "uom") {
+		if (props.mode === "uom" || props.mode === "simple" || props.mode === "cart-edit") {
 			option.quantity = quantity.value;
 		}
 		emit("option-selected", option);
