@@ -102,6 +102,13 @@
 						]"
 						:aria-label="__('Search items')"
 					/>
+					<!-- F4 hint badge -->
+					<div
+						v-if="!searchTerm"
+						class="absolute inset-y-0 end-16 sm:end-24 flex items-center pointer-events-none"
+					>
+						<kbd class="font-mono text-[9px] leading-none bg-gray-100 text-gray-400 border border-gray-300 rounded px-1 py-0.5 select-none hidden sm:inline">F4</kbd>
+					</div>
 					<!-- Barcode Scan Icon and Auto-Add Toggle -->
 					<div class="absolute inset-y-0 end-0 pe-1 sm:pe-2 flex items-center gap-0.5">
 						<button
@@ -225,6 +232,19 @@
 						</svg>
 					</button>
 				</div>
+
+				<!-- Keyboard shortcuts "?" button -->
+				<button
+					@click="$emit('show-shortcuts')"
+					class="p-1.5 sm:p-2 rounded hover:bg-gray-100 active:bg-gray-200 text-gray-500 hover:text-gray-700 transition-colors touch-manipulation flex-shrink-0"
+					:title="__('Keyboard shortcuts')"
+					:aria-label="__('Keyboard shortcuts')"
+				>
+					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+							d="M12 4v1m0 14v1M4 12H3m18 0h-1m-2.05-6.95-.71.71M6.76 17.24l-.71.71M17.24 17.24l.71.71M6.76 6.76l-.71-.71M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+					</svg>
+				</button>
 
 				<!-- Sort Dropdown -->
 				<div class="relative z-50">
@@ -1051,7 +1071,7 @@ const props = defineProps({
 	},
 });
 
-const emit = defineEmits(["item-selected"]);
+const emit = defineEmits(["item-selected", "show-shortcuts"]);
 
 // Use composables
 const { getStockStatus } = useStock();

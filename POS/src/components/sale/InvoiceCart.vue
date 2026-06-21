@@ -280,6 +280,13 @@
 								autocomplete="off"
 								:aria-label="__('Search customer in cart')"
 							/>
+							<!-- F8 hint badge -->
+							<div
+								v-if="!customerSearch"
+								class="absolute inset-y-0 end-3 flex items-center pointer-events-none"
+							>
+								<kbd class="font-mono text-[9px] leading-none bg-gray-100 text-gray-400 border border-gray-300 rounded px-1 py-0.5 select-none hidden md:inline">F8</kbd>
+							</div>
 
 							<!-- Clear search button -->
 							<button
@@ -1486,6 +1493,7 @@
 						/>
 					</svg>
 					<span>{{ __("Checkout") }}</span>
+					<kbd class="hidden sm:inline font-mono text-[9px] leading-none border border-white/60 rounded px-1 py-0.5 opacity-70 select-none ms-1">F9</kbd>
 				</button>
 
 				<!-- Hold Order Button (Secondary - 50% width) -->
