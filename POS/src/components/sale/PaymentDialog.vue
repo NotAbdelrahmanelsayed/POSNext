@@ -1621,6 +1621,7 @@
 									<span class="truncate">{{
 										isSubmitting ? __("Processing...") : __("On Account")
 									}}</span>
+									<kbd class="hidden lg:inline font-mono text-[8px] leading-none rounded border border-current px-0.5 py-px opacity-60 select-none">Alt+C</kbd>
 								</button>
 							</div>
 
@@ -1919,6 +1920,7 @@
 							<span>{{
 								isSubmitting ? __("Processing...") : __("Pay on Account")
 							}}</span>
+							<kbd class="font-mono text-[9px] leading-none rounded border border-current px-1 py-px opacity-60 select-none">Alt+C</kbd>
 						</button>
 
 						<!-- Complete/Partial Payment Button -->
@@ -2230,9 +2232,18 @@ function handleNumpadEnter(value) {
 
 function handlePaymentMethodShortcut(event) {
 	if (!props.modelValue) return;
-	if (!event.altKey) return;
-	const digit = Number.parseInt(event.key, 10);
-	if (Number.isNaN(digit) || digit < 1 || digit > 9) return;
+	if (!event.altKey || event.ctrlKey || event.metaKey) return;
+
+	// Alt+C → Pay on Account
+	if (event.code === "KeyC" && props.allowCreditSale && !isSubmitting.value) {
+		event.preventDefault();
+		addCreditAccountPayment();
+		return;
+	}
+
+	// Alt+1–9 → select payment method (use event.code for layout-independence)
+	if (!/^Digit[1-9]$/.test(event.code)) return;
+	const digit = Number(event.code.slice(5));
 	if (remainingAmount.value <= 0) return;
 	const method = filteredPaymentMethods.value[digit - 1];
 	if (!method) return;

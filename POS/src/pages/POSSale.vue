@@ -315,6 +315,7 @@
 								:cart-items="cartStore.invoiceItems"
 								:currency="shiftStore.profileCurrency"
 								@item-selected="handleItemSelected"
+								@show-shortcuts="uiStore.showShortcutsDialog = true"
 							/>
 						</div>
 					</keep-alive>
@@ -1006,6 +1007,9 @@
 
 		<!-- Session Lock Screen (outside v-if/v-else so it renders even during loading) -->
 		<SessionLockScreen />
+
+		<!-- Shortcuts Help Dialog (outside v-else so it always mounts) -->
+		<ShortcutsHelpDialog v-model="uiStore.showShortcutsDialog" />
 	</div>
 </template>
 
@@ -1013,8 +1017,8 @@
 // Module-scoped init guard — prevents redundant heavy initialization
 // when component remounts due to translationVersion changes.
 // Tracks the profile+shift key so a user/shift change correctly re-initializes.
-const _initializedKey = null
-const _posInitPromise = null
+let _initializedKey = null
+let _posInitPromise = null
 </script>
 
 <script setup>
@@ -1046,6 +1050,7 @@ import CreditSalesSummaryDialog from "@/components/customers/CreditSalesSummaryD
 import CustomerDuesDialog from "@/components/customers/CustomerDuesDialog.vue";
 import InvoiceManagement from "@/components/invoices/InvoiceManagement.vue";
 import InvoiceDetailDialog from "@/components/invoices/InvoiceDetailDialog.vue";
+import ShortcutsHelpDialog from "@/components/sale/ShortcutsHelpDialog.vue";
 import { useRealtimeStock } from "@/composables/useRealtimeStock";
 import { useSessionLock } from "@/composables/useSessionLock";
 import { useIdleRefocus } from "@/composables/useIdleRefocus";
@@ -1272,13 +1277,29 @@ onMounted(async () => {
 
 	// Global keyboard shortcuts
 	const handleGlobalKeydown = (event) => {
-		// Skip if any dialog is open or if user is typing in an input/textarea
-		if (uiStore.isAnyDialogOpen) return;
 		const tag = document.activeElement?.tagName;
+		const isInInput = tag === "INPUT" || tag === "TEXTAREA";
+
+		// "?" always toggles the shortcuts modal regardless of other dialog state
+		if (event.key === "?" && !isInInput && !event.altKey && !event.ctrlKey && !event.metaKey) {
+			event.preventDefault();
+			uiStore.showShortcutsDialog = !uiStore.showShortcutsDialog;
+			return;
+		}
+
+		// Skip all other shortcuts when any modal dialog is open
+		if (uiStore.isAnyDialogOpen) return;
+
 		const isFunctionKey = event.key.startsWith("F") && !isNaN(event.key.slice(1));
-		const isAltDigit = event.altKey && event.key >= "1" && event.key <= "5";
-		const isAltQ = event.altKey && (event.key === "q" || event.key === "Q");
-		if (!isFunctionKey && !isAltDigit && !isAltQ && (tag === "INPUT" || tag === "TEXTAREA")) return;
+		// Use event.code for Alt+key combos — modifier-independent
+		const isAltDigit =
+			event.altKey &&
+			!event.ctrlKey &&
+			!event.metaKey &&
+			/^Digit[1-5]$/.test(event.code);
+		const isAltQ =
+			event.altKey && !event.ctrlKey && !event.metaKey && event.code === "KeyQ";
+		if (!isFunctionKey && !isAltDigit && !isAltQ && isInInput) return;
 
 		if (event.key === "F4") {
 			event.preventDefault();
@@ -1290,7 +1311,7 @@ onMounted(async () => {
 			event.preventDefault();
 			handleProceedToPayment();
 		} else if (isAltDigit && itemStore.searchTerm?.trim() && itemStore.filteredItems?.length) {
-			const idx = parseInt(event.key) - 1;
+			const idx = Number(event.code.slice(5)) - 1;
 			const item = itemStore.filteredItems[idx];
 			if (item) {
 				event.preventDefault();

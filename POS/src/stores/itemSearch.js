@@ -124,8 +124,9 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 	const registeredAllItems = new Set();
 	const registeredSearchItems = new Set();
 
-	// Search debounce timer
+	// Search debounce timer and stale-result guard
 	let searchDebounceTimer = null;
+	let searchRequestId = 0;
 
 	// Real-time POS Profile update handler
 	let posProfileUpdateCleanup = null;
@@ -1662,8 +1663,15 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 		}
 
 		// Debounce search - wait 300ms after user stops typing
+		const myToken = ++searchRequestId;
+		const requestTerm = term;
 		return new Promise((resolve) => {
 			searchDebounceTimer = setTimeout(async () => {
+				// Bail out if a newer search has already started
+				if (myToken !== searchRequestId || searchTerm.value !== requestTerm) {
+					resolve([]);
+					return;
+				}
 				searching.value = true;
 
 				// Get search limit once for this search operation
@@ -1679,6 +1687,11 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 					const cached = await offlineWorker.searchCachedItems(term, searchLimit);
 
 					if (cached && cached.length > 0) {
+						// Guard: discard stale results
+						if (myToken !== searchRequestId || searchTerm.value !== requestTerm) {
+							resolve([]);
+							return;
+						}
 						// Show cached results immediately (instant!)
 						setSearchResults(cached);
 						searching.value = false;
@@ -1702,6 +1715,10 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 					const serverResults = response?.message || response || [];
 
 					if (serverResults.length > 0) {
+						// Guard: discard stale results
+						if (myToken !== searchRequestId || searchTerm.value !== requestTerm) {
+							return;
+						}
 						// Update with fresh server results
 						setSearchResults(serverResults);
 						log.success(`Found ${serverResults.length} items on server`);
@@ -1714,6 +1731,11 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 							resolve(serverResults);
 						}
 					} else if (!cached || cached.length === 0) {
+						// Guard: discard stale results
+						if (myToken !== searchRequestId || searchTerm.value !== requestTerm) {
+							resolve([]);
+							return;
+						}
 						// No results from either cache or server
 						setSearchResults([]);
 						resolve([]);
@@ -1728,17 +1750,25 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 								term,
 								searchLimit
 							);
+							if (myToken !== searchRequestId || searchTerm.value !== requestTerm) {
+								resolve([]);
+								return;
+							}
 							setSearchResults(cached || []);
 							resolve(cached || []);
 							log.info(`Fallback: found ${cached?.length || 0} items in cache`);
 						} catch (cacheError) {
 							log.error("Cache search also failed", cacheError);
-							setSearchResults([]);
+							if (myToken === searchRequestId && searchTerm.value === requestTerm) {
+								setSearchResults([]);
+							}
 							resolve([]);
 						}
 					}
 				} finally {
-					searching.value = false;
+					if (myToken === searchRequestId) {
+						searching.value = false;
+					}
 				}
 			}, performanceConfig.get("searchDebounce")); // Reactive: auto-adjusted 500ms/300ms/150ms based on device
 		});

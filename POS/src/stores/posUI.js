@@ -29,6 +29,9 @@ export const usePOSUIStore = defineStore("posUI", () => {
 	const { isOpen: showErrorDialog } = useDialog("invoiceError");
 	const { isOpen: showCreditSalesSummary } = useDialog("creditSalesSummary");
 
+	// Shortcuts help modal — plain ref so it does NOT set isAnyDialogOpen
+	const showShortcutsDialog = ref(false);
+
 	// Global dialog state
 	const { isAnyDialogOpen } = useDialogState();
 
@@ -168,6 +171,7 @@ export const usePOSUIStore = defineStore("posUI", () => {
 	return {
 		// State
 		isLoading,
+		showShortcutsDialog,
 		showPaymentDialog,
 		showCustomerDialog,
 		showSuccessDialog,
