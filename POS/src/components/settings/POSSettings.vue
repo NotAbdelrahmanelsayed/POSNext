@@ -1153,6 +1153,21 @@
 											:label="__('Show Buying Price to Authorized Users')"
 											:description="__('Displays item cost (valuation rate) in the cart. Only visible to System Managers and POS Managers.')"
 										/>
+										<div class="pt-1 pb-0.5 border-t border-gray-100">
+											<p class="text-xs font-medium text-gray-500 mb-2">{{ __('Item Search Defaults') }}</p>
+											<div class="flex flex-col gap-2">
+												<CheckboxField
+													v-model="settings.default_scanner_enabled"
+													:label="__('Barcode Scanner Enabled by Default')"
+													:description="__('Barcode scanner button starts enabled when the POS loads')"
+												/>
+												<CheckboxField
+													v-model="settings.default_auto_add_enabled"
+													:label="__('Auto-Add Enabled by Default')"
+													:description="__('Auto-Add (+) button starts enabled when the POS loads')"
+												/>
+											</div>
+										</div>
 									</div>
 								</div>
 							</div>
@@ -1262,6 +1277,8 @@ const settings = ref({
 	tax_inclusive: 0,
 	cart_lifo: 0,
 	show_buying_price: 0,
+	default_scanner_enabled: 0,
+	default_auto_add_enabled: 0,
 })
 
 // Stock Sync Settings (localStorage persisted)

@@ -1118,7 +1118,20 @@ const {
 	onItemFound: selectItem,
 	showWarning,
 	isAnyDialogOpen,
+	initialScannerEnabled: settingsStore.defaultScannerEnabled,
+	initialAutoAddEnabled: settingsStore.defaultAutoAddEnabled,
 });
+
+// Apply saved defaults once after settings load (guard against clobbering user clicks)
+let searchDefaultsApplied = false;
+function applySearchDefaults() {
+	if (searchDefaultsApplied) return;
+	searchDefaultsApplied = true;
+	scannerEnabled.value = settingsStore.defaultScannerEnabled;
+	autoAddEnabled.value = settingsStore.defaultAutoAddEnabled;
+}
+if (settingsStore.isLoaded) applySearchDefaults();
+else { const stop = watch(() => settingsStore.isLoaded, (v) => { if (v) { applySearchDefaults(); stop(); } }); }
 
 // Local state
 const viewMode = ref("grid");

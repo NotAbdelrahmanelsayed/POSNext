@@ -1631,3 +1631,8 @@ Points applied: {0}. Please pay remaining {1} with {2},تم خصم النقاط:
 "Select payment method","اختر طريقة دفع",""
 "Item search","البحث عن صنف",""
 "or Esc to close","أو Esc للإغلاق",""
+"Item Search Defaults","إعدادات البحث عن الأصناف الافتراضية",""
+"Barcode Scanner Enabled by Default","تفعيل الماسح الضوئي افتراضياً",""
+"Barcode scanner button starts enabled when the POS loads","يبدأ زر الماسح الضوئي مفعلاً عند تحميل نقطة البيع",""
+"Auto-Add Enabled by Default","تفعيل الإضافة التلقائية افتراضياً",""
+"Auto-Add (+) button starts enabled when the POS loads","يبدأ زر الإضافة التلقائية (+) مفعلاً عند تحميل نقطة البيع",""

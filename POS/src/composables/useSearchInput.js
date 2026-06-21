@@ -23,11 +23,12 @@ import { QueuedMutex } from "@/utils/mutex";
  * @param {Object} options.showWarning        - useToast().showWarning
  * @param {import('vue').Ref<boolean>} options.isAnyDialogOpen
  */
-export function useSearchInput({ itemStore, onItemFound, showWarning, isAnyDialogOpen }) {
+export function useSearchInput({ itemStore, onItemFound, showWarning, isAnyDialogOpen,
+	initialScannerEnabled = false, initialAutoAddEnabled = false }) {
 	// --- Reactive state (exposed) ---
 	const searchInputRef = ref(null);
-	const scannerEnabled = ref(false);
-	const autoAddEnabled = ref(false);
+	const scannerEnabled = ref(initialScannerEnabled);
+	const autoAddEnabled = ref(initialAutoAddEnabled);
 
 	// --- Internal (non-reactive) ---
 	let autoSearchTimer = null;

@@ -72,6 +72,9 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 		allow_negative_stock: 0,
 		// Sales Persons
 		enable_sales_persons: "Disabled",
+		// Item Search Defaults
+		default_scanner_enabled: 0,
+		default_auto_add_enabled: 0,
 		// Security
 		enable_session_lock: 0,
 		session_lock_timeout: 5,
@@ -229,6 +232,12 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 	const customerSearchShowAll = computed(() =>
 		Boolean(settings.value.customer_search_show_all),
 	)
+	const defaultScannerEnabled = computed(() =>
+		Boolean(settings.value.default_scanner_enabled),
+	)
+	const defaultAutoAddEnabled = computed(() =>
+		Boolean(settings.value.default_auto_add_enabled),
+	)
 	const allowSubmissionsInBackgroundJob = computed(() =>
 		Boolean(settings.value.allow_submissions_in_background_job),
 	)
@@ -376,6 +385,9 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 			input_qty: 0,
 			allow_negative_stock: 0,
 			enable_sales_persons: "Disabled",
+			// Item Search Defaults
+			default_scanner_enabled: 0,
+			default_auto_add_enabled: 0,
 			// Security
 			enable_session_lock: 0,
 			session_lock_timeout: 5,
@@ -504,6 +516,8 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 		idleRefocusEnabled,
 		idleRefocusSeconds,
 		customerSearchShowAll,
+		defaultScannerEnabled,
+		defaultAutoAddEnabled,
 		allowSubmissionsInBackgroundJob,
 		allowDeleteOfflineInvoice,
 		allowChangePostingDate,
