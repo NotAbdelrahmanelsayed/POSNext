@@ -107,7 +107,7 @@
 						v-if="!searchTerm"
 						class="absolute inset-y-0 end-16 sm:end-24 flex items-center pointer-events-none"
 					>
-						<kbd class="font-mono text-[9px] leading-none bg-gray-100 text-gray-400 border border-gray-300 rounded px-1 py-0.5 select-none hidden sm:inline">F4</kbd>
+						<kbd class="font-mono text-[11px] font-semibold leading-none bg-gray-800/65 text-white rounded px-1.5 py-0.5 select-none">F4</kbd>
 					</div>
 					<!-- Barcode Scan Icon and Auto-Add Toggle -->
 					<div class="absolute inset-y-0 end-0 pe-1 sm:pe-2 flex items-center gap-0.5">
@@ -233,17 +233,19 @@
 					</button>
 				</div>
 
-				<!-- Keyboard shortcuts "?" button -->
+				<!-- Keyboard shortcuts button -->
 				<button
 					@click="$emit('show-shortcuts')"
-					class="p-1.5 sm:p-2 rounded hover:bg-gray-100 active:bg-gray-200 text-gray-500 hover:text-gray-700 transition-colors touch-manipulation flex-shrink-0"
+					class="flex items-center gap-1 px-2 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 active:bg-gray-100 text-gray-600 hover:text-gray-800 transition-colors touch-manipulation flex-shrink-0 text-xs font-semibold"
 					:title="__('Keyboard shortcuts')"
 					:aria-label="__('Keyboard shortcuts')"
 				>
-					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<rect x="2" y="6" width="20" height="13" rx="2" stroke-width="2" stroke="currentColor" fill="none"/>
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-							d="M12 4v1m0 14v1M4 12H3m18 0h-1m-2.05-6.95-.71.71M6.76 17.24l-.71.71M17.24 17.24l.71.71M6.76 6.76l-.71-.71M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+							d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h4M14 14h4"/>
 					</svg>
+					<span class="hidden sm:inline">?</span>
 				</button>
 
 				<!-- Sort Dropdown -->

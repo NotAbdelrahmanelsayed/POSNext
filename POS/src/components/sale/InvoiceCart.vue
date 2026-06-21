@@ -72,7 +72,7 @@
 					<div class="flex items-stretch gap-2">
 						<!-- Customer Card -->
 						<div
-							class="flex-1 flex items-center gap-1.5 bg-white border border-gray-200 rounded-xl p-1.5 shadow-sm min-w-0"
+							class="relative flex-1 flex items-center gap-1.5 bg-white border border-gray-200 rounded-xl p-1.5 shadow-sm min-w-0"
 						>
 							<!-- Customer Avatar & Info -->
 							<div class="flex items-center gap-2 min-w-0 flex-1 px-1.5 py-1">
@@ -107,6 +107,9 @@
 									</p>
 								</div>
 							</div>
+
+							<!-- F8 shortcut hint on card -->
+							<kbd class="absolute bottom-0.5 start-1.5 text-[9px] font-mono bg-gray-800/50 text-white rounded px-1 py-0.5 leading-none pointer-events-none select-none hidden sm:inline">F8</kbd>
 
 							<!-- Action Buttons -->
 							<div class="flex items-center gap-0.5 flex-shrink-0" @click.stop>
@@ -285,7 +288,7 @@
 								v-if="!customerSearch"
 								class="absolute inset-y-0 end-3 flex items-center pointer-events-none"
 							>
-								<kbd class="font-mono text-[9px] leading-none bg-gray-100 text-gray-400 border border-gray-300 rounded px-1 py-0.5 select-none hidden md:inline">F8</kbd>
+								<kbd class="font-mono text-[11px] font-semibold leading-none bg-gray-800/65 text-white rounded px-1.5 py-0.5 select-none hidden sm:inline">F8</kbd>
 							</div>
 
 							<!-- Clear search button -->
@@ -1493,7 +1496,7 @@
 						/>
 					</svg>
 					<span>{{ __("Checkout") }}</span>
-					<kbd class="hidden sm:inline font-mono text-[9px] leading-none border border-white/60 rounded px-1 py-0.5 opacity-70 select-none ms-1">F9</kbd>
+					<kbd class="hidden sm:inline font-mono text-[11px] font-semibold leading-none bg-white/20 border border-white/50 rounded px-1.5 py-0.5 select-none ms-1">F9</kbd>
 				</button>
 
 				<!-- Hold Order Button (Secondary - 50% width) -->
@@ -2437,8 +2440,12 @@ onBeforeUnmount(() => {
 
 defineExpose({
 	focusCustomerSearch() {
-		customerSearchInputRef.value?.focus()
+		if (props.customer) {
+			// Customer already selected — clear it and reveal the search input
+			clearCustomer()
+		} else {
+			customerSearchInputRef.value?.focus()
+		}
 	},
 })
 </script>
-```
