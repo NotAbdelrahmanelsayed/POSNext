@@ -74,10 +74,15 @@
 						<div
 							class="relative flex-1 flex items-center gap-1.5 bg-white border border-gray-200 rounded-xl p-1.5 shadow-sm min-w-0"
 						>
-							<!-- Customer Avatar & Info -->
-							<div class="flex items-center gap-2 min-w-0 flex-1 px-1.5 py-1">
+							<!-- Customer Avatar & Info — clickable to open account statement -->
+							<button
+								type="button"
+								@click.stop="$emit('view-customer-dues', customer)"
+								class="flex items-center gap-2 min-w-0 flex-1 px-1.5 py-1 rounded-lg hover:bg-orange-50 active:bg-orange-100 transition-colors text-start touch-manipulation"
+								:title="__('View customer dues')"
+							>
 								<div
-									class="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center flex-shrink-0"
+									class="w-8 h-8 bg-gradient-to-br from-orange-400 to-orange-500 rounded-full flex items-center justify-center flex-shrink-0"
 								>
 									<svg
 										class="w-4 h-4 text-white"
@@ -100,13 +105,13 @@
 										{{ customer.customer_name || customer.name }}
 									</p>
 									<p
-										v-if="customer.mobile_no"
-										class="text-[10px] text-gray-500 truncate leading-tight"
+										class="text-[10px] truncate leading-tight"
+										:class="customer.mobile_no ? 'text-gray-500' : 'text-orange-400'"
 									>
-										{{ customer.mobile_no }}
+										{{ customer.mobile_no || __('View statement →') }}
 									</p>
 								</div>
-							</div>
+							</button>
 
 							<!-- F8 shortcut hint on card -->
 							<kbd class="absolute bottom-0.5 start-1.5 text-[9px] font-mono bg-gray-800/50 text-white rounded px-1 py-0.5 leading-none pointer-events-none select-none hidden sm:inline">F8</kbd>
@@ -1377,7 +1382,7 @@
 									<svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-5 5a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 10V5a2 2 0 012-2z" />
 									</svg>
-									{{ __('Cost') }}: {{ formatCurrency(item.valuation_rate) }}
+									{{ __('Cost') }}: {{ formatCurrency(item.valuation_rate * (item.conversion_factor || 1)) }}
 								</span>
 							</div>
 						</div>
@@ -1651,6 +1656,7 @@ const emit = defineEmits([
 	"select-customer", // (customer) - Select/change customer
 	"edit-customer", // (customer) - Open edit customer dialog
 	"create-customer", // (searchText) - Open create customer dialog
+	"view-customer-dues", // (customer) - Open customer dues/statement dialog
 	"proceed-to-payment", // () - Navigate to payment screen
 	"clear-cart", // () - Clear all items from cart
 	"save-draft", // () - Save current cart as draft/hold order
