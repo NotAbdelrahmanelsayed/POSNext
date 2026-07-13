@@ -485,6 +485,7 @@ import {
 import { Button, FeatherIcon, createResource } from "frappe-ui";
 import { computed, ref, watch } from "vue";
 import SelectInput from "@/components/common/SelectInput.vue";
+import { useDialogSubmit } from "@/composables/useDialogSubmit";
 
 const { showSuccess, showError, showWarning } = useToast();
 const settingsStore = usePOSSettingsStore();
@@ -948,6 +949,13 @@ function updateItem() {
 function cancel() {
 	show.value = false;
 }
+
+useDialogSubmit({
+	isOpen: show,
+	onSubmit: updateItem,
+	canSubmit: () => hasStock.value && !isCheckingStock.value,
+	onEscape: cancel,
+});
 </script>
 
 <style scoped>

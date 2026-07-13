@@ -38,8 +38,8 @@
 							type="text"
 							:placeholder="__('ENTER-CODE-HERE')"
 							class="flex-1 uppercase"
-							@keyup.enter="applyCoupon"
 							:disabled="applying"
+							@input="couponCode = $event"
 						/>
 						<Button
 							@click="applyCoupon"
@@ -236,6 +236,7 @@ import { Button, Dialog, Input, createResource } from "frappe-ui";
 import { ref, watch } from "vue";
 import { useInvoice } from "@/composables/useInvoice";
 import { useToast } from "@/composables/useToast";
+import { useDialogSubmit } from "@/composables/useDialogSubmit";
 
 // Get calculateDiscountAmount helper from composable
 const { calculateDiscountAmount } = useInvoice();
@@ -445,4 +446,10 @@ function removeDiscount() {
 function formatCurrency(amount) {
 	return formatCurrencyUtil(Number.parseFloat(amount || 0), props.currency);
 }
+
+useDialogSubmit({
+	isOpen: show,
+	onSubmit: applyCoupon,
+	canSubmit: () => !applying.value,
+});
 </script>

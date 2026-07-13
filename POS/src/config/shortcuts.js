@@ -25,5 +25,13 @@ export function getShortcutGroups() {
 				{ keys: ["Alt", "C"], label: __("Pay on Account") },
 			],
 		},
+		{
+			title: __("Dialogs"),
+			shortcuts: [
+				{ keys: ["Enter"], label: __("Confirm dialog") },
+				{ keys: ["Esc"], label: __("Close dialog") },
+				{ keys: ["Ctrl", "S"], label: __("Confirm dialog") },
+			],
+		},
 	]
 }

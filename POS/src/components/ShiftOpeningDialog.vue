@@ -254,6 +254,7 @@ import { useShift } from "../composables/useShift";
 import { useFormatters } from "../composables/useFormatters";
 import ShiftClosingDialog from "./ShiftClosingDialog.vue";
 import TranslatedHTML from "./common/TranslatedHTML.vue";
+import { useDialogSubmit } from "../composables/useDialogSubmit";
 
 const props = defineProps({
 	modelValue: Boolean,
@@ -389,6 +390,22 @@ async function openShift() {
 		console.error("Error opening shift:", error);
 	}
 }
+
+useDialogSubmit({
+	isOpen: open,
+	onSubmit: () => {
+		if (step.value === 1) {
+			nextStep();
+		} else if (step.value === 2) {
+			openShift();
+		}
+	},
+	canSubmit: () => {
+		if (step.value === 1) return !!selectedProfile.value;
+		if (step.value === 2) return !createShiftResource.loading;
+		return false;
+	},
+});
 
 function resumeShift() {
 	emit("shift-opened");

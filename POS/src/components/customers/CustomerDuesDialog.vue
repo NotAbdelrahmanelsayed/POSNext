@@ -436,12 +436,6 @@ const show = computed({
 const loading = ref(false)
 const payingLump = ref(false)
 
-// Enter or Ctrl/Cmd+S opens the lump-sum (pay all dues) payment.
-useDialogSubmit({
-	isOpen: show,
-	onSubmit: () => openLumpSumPayment(),
-	canSubmit: () => !isOffline() && !payingLump.value,
-})
 const statement = ref(null)
 const expandedInvoices = ref(new Set())
 const activeFilter = ref("all")
@@ -647,6 +641,14 @@ async function handleSinglePaymentCompleted(paymentData) {
 function handleClose() {
 	show.value = false
 }
+
+// Enter or Ctrl/Cmd+S opens the lump-sum (pay all dues) payment; Esc closes.
+useDialogSubmit({
+	isOpen: show,
+	onSubmit: () => openLumpSumPayment(),
+	canSubmit: () => !isOffline() && !payingLump.value,
+	onEscape: handleClose,
+})
 
 function formatCurrency(amount) {
 	return formatCurrencyUtil(Number.parseFloat(amount || 0), props.currency)
