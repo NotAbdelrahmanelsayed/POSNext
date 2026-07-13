@@ -658,6 +658,7 @@ def make_closing_shift_from_opening(opening_shift):
 	closing_shift.set("pos_expenses", pos_expenses_table)
 
 	# Build response with display-only fields
+	collections_total = sum(flt(py.get("paid_amount", 0)) for py in pos_payments_table)
 	result = closing_shift.as_dict()
 	result.update(
 		{
@@ -668,6 +669,8 @@ def make_closing_shift_from_opening(opening_shift):
 			"expenses_total": expenses_total,
 			"expenses_count": len(pos_expenses_table),
 			"pos_expenses": pos_expenses_table,
+			"collections_total": collections_total,
+			"collections_count": len(pos_payments_table),
 			"pos_transactions": pos_transactions,  # Include return info for display
 		}
 	)

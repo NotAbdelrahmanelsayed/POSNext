@@ -17,6 +17,7 @@ ITEM_RESULT_FIELDS = [
 	"item_name",
 	"description",
 	"stock_uom",
+	"sales_uom",
 	"image",
 	"is_stock_item",
 	"has_batch_no",
@@ -346,6 +347,17 @@ def search_by_barcode(barcode, pos_profile):
 		barcode_data = frappe.db.get_value(
 			"Item Barcode", {"barcode": effective_barcode}, ["parent", "uom"], as_dict=True
 		)
+
+		if not barcode_data:
+			# Stored barcodes can carry stray leading/trailing whitespace from manual
+			# entry or import; fall back to a whitespace-tolerant match so scanning
+			# the clean code doesn't fail silently.
+			trimmed_rows = frappe.db.sql(
+				"""SELECT `parent`, `uom` FROM `tabItem Barcode` WHERE TRIM(barcode) = %s LIMIT 1""",
+				(effective_barcode,),
+				as_dict=True,
+			)
+			barcode_data = trimmed_rows[0] if trimmed_rows else None
 
 		if barcode_data:
 			item_code = barcode_data.parent
@@ -1439,28 +1451,39 @@ def get_items(
 				)
 
 			# Finalize display price & display UOM
+			# Prefer the item's configured default sales UOM (e.g. Nos) over stock UOM
+			# so items counted/stocked in a fine unit (gram) still default to the unit
+			# the customer actually buys at the POS.
+			target_uom = item.get("sales_uom") or stock_uom
 			display_rate = 0.0
-			display_uom = stock_uom
+			display_uom = target_uom
 
 			if price_row:
 				raw_rate = flt(price_row.get("price_list_rate") or 0)
 				price_uom = price_row.get("uom") or stock_uom
-				if price_uom and stock_uom and price_uom != stock_uom:
-					# convert to per-stock-UOM if possible
-					cf = flt(conversion_map[item["item_code"]].get(price_uom) or 0)
-					if cf:
-						display_rate = raw_rate / cf
-						display_uom = stock_uom
+				if price_uom == target_uom:
+					display_rate = raw_rate
+					display_uom = target_uom
+				elif price_uom and target_uom:
+					# convert price_uom -> stock units -> target_uom
+					price_cf = flt(conversion_map[item["item_code"]].get(price_uom) or 0)
+					target_cf = (
+						1 if target_uom == stock_uom
+						else flt(conversion_map[item["item_code"]].get(target_uom) or 0)
+					)
+					if price_cf and target_cf:
+						display_rate = (raw_rate / price_cf) * target_cf
+						display_uom = target_uom
 					else:
 						# no conversion available: show as is (price UOM)
 						display_rate = raw_rate
 						display_uom = price_uom
 				else:
 					display_rate = raw_rate
-					display_uom = stock_uom
+					display_uom = target_uom
 			elif derived_price is not None:
 				display_rate = flt(derived_price)
-				display_uom = stock_uom
+				display_uom = target_uom
 
 			item["rate"] = display_rate
 			item["price_list_rate"] = display_rate
@@ -1706,12 +1729,42 @@ def get_items_bulk(
 			item_code = item["item_code"]
 			stock_uom = item.get("stock_uom")
 
-			# Price: prefer stock_uom, then None/empty UOM (Item Price without UOM)
+			# Price: prefer the item's default sales UOM, then stock_uom, then
+			# None/empty UOM (Item Price without UOM), then any other priced UOM
+			# (converted back to the target UOM via its conversion factor).
+			target_uom = item.get("sales_uom") or stock_uom
 			prices = uom_prices_map.get(item_code, {})
-			item["rate"] = flt(prices.get(stock_uom) or prices.get(None) or prices.get("") or 0)
+			raw_rate = prices.get(target_uom)
+			price_uom = target_uom if raw_rate is not None else None
+
+			if raw_rate is None:
+				raw_rate = prices.get(stock_uom)
+				price_uom = stock_uom if raw_rate is not None else None
+			if raw_rate is None:
+				raw_rate = prices.get(None) or prices.get("")
+				price_uom = target_uom if raw_rate is not None else None
+			if raw_rate is None and prices:
+				price_uom, raw_rate = next(iter(prices.items()))
+
+			raw_rate = flt(raw_rate or 0)
+			if price_uom and price_uom != target_uom:
+				price_cf = flt(conversion_map[item_code].get(price_uom) or 0)
+				target_cf = (
+					1 if target_uom == stock_uom
+					else flt(conversion_map[item_code].get(target_uom) or 0)
+				)
+				if price_cf and target_cf:
+					item["rate"] = (raw_rate / price_cf) * target_cf
+					item["uom"] = target_uom
+				else:
+					item["rate"] = raw_rate
+					item["uom"] = price_uom
+			else:
+				item["rate"] = raw_rate
+				item["uom"] = target_uom
+
 			item["price_list_rate"] = item["rate"]
-			item["uom"] = stock_uom
-			item["price_uom"] = stock_uom
+			item["price_uom"] = item["uom"]
 			item["conversion_factor"] = 1
 			item["price_list_rate_price_uom"] = item["rate"]
 

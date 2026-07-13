@@ -200,7 +200,7 @@ def get_credit_customers_summary(pos_profile=None, company=None):
 
 	try:
 		from frappe.query_builder import DocType
-		from frappe.query_builder.functions import Abs, Coalesce, Sum
+		from frappe.query_builder.functions import Abs, Coalesce, Max, Sum
 		from pypika import Case
 
 		SalesInvoice = DocType("Sales Invoice")
@@ -209,12 +209,16 @@ def get_credit_customers_summary(pos_profile=None, company=None):
 		if company:
 			base_filters = base_filters & (SalesInvoice.company == company)
 
-		# Regular invoices: positive outstanding (what customer owes) + due count
+		# Regular invoices: positive outstanding (what customer owes) + due count.
+		# Group by customer only (not customer_name) — customer_name can differ across
+		# invoices when the customer record was renamed, which would create duplicate rows
+		# and cause the credit subtraction to be applied multiple times, pushing
+		# some customers' net_balance to ≤ 0 and hiding them from the list.
 		regular_query = (
 			frappe.qb.from_(SalesInvoice)
 			.select(
 				SalesInvoice.customer,
-				SalesInvoice.customer_name,
+				Max(SalesInvoice.customer_name).as_("customer_name"),
 				Coalesce(
 					Sum(
 						Case()
@@ -229,7 +233,7 @@ def get_credit_customers_summary(pos_profile=None, company=None):
 				).as_("due_count"),
 			)
 			.where(base_filters & (SalesInvoice.is_return == 0))
-			.groupby(SalesInvoice.customer, SalesInvoice.customer_name)
+			.groupby(SalesInvoice.customer)
 		)
 
 		# Return invoices: only negative outstanding counts as credit (no cash refund)
@@ -255,23 +259,27 @@ def get_credit_customers_summary(pos_profile=None, company=None):
 		customers = []
 		for r in regular_rows:
 			total_outstanding = flt(r.total_outstanding)
+			if total_outstanding <= 0:
+				# No unpaid invoices at all — skip entirely
+				continue
 			total_credit = credit_by_customer.get(r.customer, 0.0)
 			net_balance = total_outstanding - total_credit
-			if net_balance > 0:
-				customers.append(
-					{
-						"customer": r.customer,
-						"customer_name": r.customer_name or r.customer,
-						"total_outstanding": total_outstanding,
-						"total_credit": total_credit,
-						"net_balance": net_balance,
-						"due_count": int(r.due_count or 0),
-					}
-				)
+			customers.append(
+				{
+					"customer": r.customer,
+					"customer_name": r.customer_name or r.customer,
+					"total_outstanding": total_outstanding,
+					"total_credit": total_credit,
+					"net_balance": net_balance,
+					"due_count": int(r.due_count or 0),
+				}
+			)
 
-		customers.sort(key=lambda c: c["net_balance"], reverse=True)
+		# Sort: customers who owe net (net_balance > 0) first, then by outstanding amount
+		customers.sort(key=lambda c: (-c["net_balance"], -c["total_outstanding"]))
 
-		net_total = sum(c["net_balance"] for c in customers)
+		# Totals reflect only what customers owe net (positive net_balance)
+		net_total = sum(c["net_balance"] for c in customers if c["net_balance"] > 0)
 
 		currency = (
 			(frappe.db.get_value("Company", company, "default_currency") if company else None)
@@ -290,11 +298,7 @@ def get_credit_customers_summary(pos_profile=None, company=None):
 			title="Credit Customers Summary Error",
 			message=f"pos_profile: {pos_profile}, company: {company}\n{frappe.get_traceback()}",
 		)
-		return {
-			"customers": [],
-			"totals": {"net_balance": 0.0, "customer_count": 0},
-			"currency": "USD",
-		}
+		raise
 
 
 @frappe.whitelist()

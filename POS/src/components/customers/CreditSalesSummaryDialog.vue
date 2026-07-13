@@ -102,18 +102,42 @@
 									:key="row.customer"
 									type="button"
 									@click="$emit('select-customer', row.customer)"
-									class="w-full bg-white border border-gray-200 rounded-xl p-4 text-start hover:border-orange-300 hover:bg-orange-50 transition-colors flex items-center justify-between gap-4 group"
+									:class="[
+										'w-full bg-white border rounded-xl p-4 text-start transition-colors flex items-center justify-between gap-4 group',
+										row.net_balance > 0
+											? 'border-gray-200 hover:border-orange-300 hover:bg-orange-50'
+											: 'border-blue-100 bg-blue-50/40 hover:border-blue-300 hover:bg-blue-50',
+									]"
 								>
 									<div class="flex-1 min-w-0">
 										<div class="text-sm font-bold text-gray-900 truncate">{{ row.customer_name }}</div>
-										<div class="text-xs text-gray-500 mt-0.5">
-											{{ __('{0} invoice(s)', [row.due_count]) }}
+										<div class="text-xs text-gray-500 mt-0.5 flex items-center gap-2 flex-wrap">
+											<span>{{ __('{0} invoice(s)', [row.due_count]) }}</span>
+											<span v-if="row.total_credit > 0" class="text-blue-600 font-medium">
+												{{ __('Credit: {0}', [formatCurrency(row.total_credit)]) }}
+											</span>
 										</div>
 									</div>
 									<div class="text-end flex-shrink-0">
-										<div class="text-base font-bold text-orange-600">{{ formatCurrency(row.net_balance) }}</div>
+										<div
+											:class="[
+												'text-base font-bold',
+												row.net_balance > 0 ? 'text-orange-600' : 'text-blue-600',
+											]"
+										>
+											{{ formatCurrency(row.net_balance > 0 ? row.net_balance : row.total_outstanding) }}
+										</div>
+										<div v-if="row.net_balance <= 0" class="text-[10px] text-blue-500 mt-0.5">
+											{{ __('Has credit') }}
+										</div>
 									</div>
-									<svg class="w-4 h-4 text-gray-300 flex-shrink-0 group-hover:text-orange-400 rtl-flip" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<svg
+										:class="[
+											'w-4 h-4 flex-shrink-0 rtl-flip',
+											row.net_balance > 0 ? 'text-gray-300 group-hover:text-orange-400' : 'text-blue-300 group-hover:text-blue-500',
+										]"
+										fill="none" stroke="currentColor" viewBox="0 0 24 24"
+									>
 										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
 									</svg>
 								</button>

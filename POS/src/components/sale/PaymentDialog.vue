@@ -2235,7 +2235,7 @@ function handlePaymentMethodShortcut(event) {
 	if (!event.altKey || event.ctrlKey || event.metaKey) return;
 
 	// Alt+C → Pay on Account
-	if (event.code === "KeyC" && props.allowCreditSale && !isSubmitting.value) {
+	if (event.code === "KeyC" && props.allowCreditSale && !props.isSubmitting) {
 		event.preventDefault();
 		addCreditAccountPayment();
 		return;

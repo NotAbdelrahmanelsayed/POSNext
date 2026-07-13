@@ -153,6 +153,24 @@
 								</div>
 							</div>
 
+							<!-- Collections (payment entries collected this shift) -->
+							<div
+								v-if="hasCollections"
+								class="text-start bg-purple-50 border border-purple-200 rounded-lg p-3 md:p-4"
+							>
+								<div class="text-purple-600 text-xs uppercase font-medium mb-1">
+									{{ __("Collections") }}
+								</div>
+								<div
+									class="text-lg md:text-2xl font-bold text-purple-900 mb-0.5 md:mb-1 truncate"
+								>
+									{{ formatCurrency(closingData.collections_total) }}
+								</div>
+								<div class="text-purple-600 text-xs">
+									{{ __("{0} payments", [closingData.collections_count]) }}
+								</div>
+							</div>
+
 							<!-- Tax Collected -->
 							<div
 								class="text-start bg-gray-50 border border-gray-200 rounded-lg p-3 md:p-4"
@@ -417,6 +435,128 @@
 									</tr>
 								</tbody>
 							</table>
+						</div>
+					</div>
+
+					<!-- Payment Entries (Collections) - Collapsible -->
+					<div
+						v-if="shouldShowSummary && hasCollections"
+						class="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm"
+					>
+						<button
+							@click="showPaymentEntries = !showPaymentEntries"
+							:aria-expanded="showPaymentEntries"
+							class="w-full px-3 py-3 md:px-6 md:py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+						>
+							<div class="text-start">
+								<h3 class="text-sm md:text-lg font-medium text-gray-900">
+									{{ __("Payment Entries") }}
+								</h3>
+								<p class="text-xs md:text-sm text-gray-500">
+									{{
+										__("{0} collections • {1}", [
+											closingData.collections_count,
+											formatCurrency(closingData.collections_total),
+										])
+									}}
+								</p>
+							</div>
+							<svg
+								:class="[
+									'h-4 w-4 md:h-5 md:w-5 text-gray-400 transition-transform',
+									showPaymentEntries ? 'transform rotate-180' : '',
+								]"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M19 9l-7 7-7-7"
+								/>
+							</svg>
+						</button>
+
+						<div v-show="showPaymentEntries" class="border-t border-gray-200">
+							<!-- Mobile Card View -->
+							<div class="md:hidden divide-y divide-gray-200">
+								<div
+									v-for="(pe, idx) in closingData.pos_payments"
+									:key="idx"
+									class="p-3 hover:bg-gray-50"
+								>
+									<div class="flex justify-between items-start mb-1">
+										<span class="text-xs font-medium text-gray-900">
+											{{ pe.payment_entry || __("N/A") }}
+										</span>
+										<span class="text-sm font-semibold text-purple-700">
+											{{ formatCurrency(pe.paid_amount) }}
+										</span>
+									</div>
+									<div class="flex justify-between text-xs text-gray-500">
+										<span>{{ pe.customer }}</span>
+										<span>{{ pe.mode_of_payment }}</span>
+									</div>
+								</div>
+								<div class="bg-gray-50 p-3 flex justify-between items-center">
+									<span class="text-xs font-semibold text-gray-700">{{ __("Total:") }}</span>
+									<span class="text-sm font-bold text-purple-700">
+										{{ formatCurrency(closingData.collections_total) }}
+									</span>
+								</div>
+							</div>
+
+							<!-- Desktop Table View -->
+							<div class="hidden md:block overflow-x-auto">
+								<table class="min-w-full divide-y divide-gray-200">
+									<thead class="bg-gray-50">
+										<tr>
+											<th class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">{{ __("Reference") }}</th>
+											<th class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">{{ __("Customer") }}</th>
+											<th class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">{{ __("Mode") }}</th>
+											<th class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">{{ __("Date") }}</th>
+											<th class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">{{ __("Amount") }}</th>
+										</tr>
+									</thead>
+									<tbody class="bg-white divide-y divide-gray-200">
+										<tr
+											v-for="(pe, idx) in closingData.pos_payments"
+											:key="idx"
+											class="hover:bg-gray-50"
+										>
+											<td class="text-start px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+												{{ pe.payment_entry || __("N/A") }}
+											</td>
+											<td class="text-start px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+												{{ pe.customer }}
+											</td>
+											<td class="text-start px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+												{{ pe.mode_of_payment }}
+											</td>
+											<td class="text-start px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+												{{ formatTime(pe.posting_date) }}
+											</td>
+											<td class="text-start px-6 py-4 whitespace-nowrap text-sm font-semibold text-purple-700">
+												{{ formatCurrency(pe.paid_amount) }}
+											</td>
+										</tr>
+									</tbody>
+									<tfoot class="bg-gray-50">
+										<tr>
+											<td colspan="4" class="px-6 py-4 text-start text-sm font-semibold text-gray-700">
+												{{ __("Total Collections:") }}
+											</td>
+											<td class="px-6 py-4 whitespace-nowrap text-start">
+												<span class="text-base font-bold text-purple-700">
+													{{ formatCurrency(closingData.collections_total) }}
+												</span>
+											</td>
+										</tr>
+									</tfoot>
+								</table>
+							</div>
 						</div>
 					</div>
 
@@ -1048,6 +1188,7 @@ const closingData = ref(null);
 const closingDataResource = getClosingShiftData;
 const submitResource = submitClosingShift;
 const showInvoiceDetails = ref(false);
+const showPaymentEntries = ref(false);
 const showSuccessReport = ref(false); // Track if shift is closed and showing report
 const errorMessage = ref(""); // User-friendly error message
 const eodPrintFailed = ref(null);
@@ -1228,6 +1369,7 @@ function closeDialog() {
 	open.value = false;
 	closingData.value = null;
 	showInvoiceDetails.value = false;
+	showPaymentEntries.value = false;
 	showSuccessReport.value = false; // Reset report view
 	errorMessage.value = ""; // Clear error messages
 	eodPrintFailed.value = null;
@@ -1273,6 +1415,12 @@ const netCashImpact = computed(() => {
 	const expenses = Number.parseFloat(closingData.value.expenses_total || 0)
 	return sales - returns - expenses
 })
+
+// Check if there are any payment entries (credit collections)
+const hasCollections = computed(() => {
+	if (!closingData.value) return false;
+	return (closingData.value.collections_count || 0) > 0;
+});
 
 // Count of sales invoices (non-returns)
 const salesInvoiceCount = computed(() => {

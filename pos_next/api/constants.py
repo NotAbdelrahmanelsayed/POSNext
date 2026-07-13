@@ -45,6 +45,8 @@ POS_SETTINGS_FIELDS = [
 	"idle_refocus_seconds",
 	"customer_search_show_all",
 	"show_buying_price",
+	"default_scanner_enabled",
+	"default_auto_add_enabled",
 ]
 
 # Default POS Settings values
@@ -81,4 +83,6 @@ DEFAULT_POS_SETTINGS = {
 	"idle_refocus_seconds": 3,
 	"customer_search_show_all": 0,
 	"show_buying_price": 0,
+	"default_scanner_enabled": 0,
+	"default_auto_add_enabled": 0,
 }

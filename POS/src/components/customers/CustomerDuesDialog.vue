@@ -97,34 +97,28 @@
 							<div v-if="activeTab === 'statement'" class="space-y-6">
 
 							<!-- Summary strip -->
-							<div class="grid grid-cols-3 gap-4">
-								<!-- Total Due -->
-								<div class="bg-orange-50 border border-orange-200 rounded-xl p-4 text-center">
-									<div class="text-xs font-medium text-orange-600 mb-1">{{ __('Total Due') }}</div>
-									<div class="text-lg font-bold text-orange-700">{{ formatCurrency(statement.summary.total_outstanding) }}</div>
-									<div class="text-xs text-orange-500 mt-0.5">{{ __('{0} invoice(s)', [statement.summary.due_count]) }}</div>
+							<div class="grid grid-cols-2 gap-4">
+								<!-- Invoiced (due invoices only) -->
+								<div class="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
+									<div class="text-xs font-medium text-gray-500 mb-1">{{ __('Invoiced') }}</div>
+									<div class="text-lg font-bold text-gray-700">{{ formatCurrency(dueInvoicedTotal) }}</div>
+									<div class="text-xs text-gray-400 mt-0.5">{{ __('{0} unpaid invoice(s)', [statement.summary.due_count]) }}</div>
 								</div>
-								<!-- Credit -->
-								<div class="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
-									<div class="text-xs font-medium text-green-600 mb-1">{{ __('Return Credit') }}</div>
-									<div class="text-lg font-bold text-green-700">{{ formatCurrency(statement.summary.total_credit) }}</div>
-									<div class="text-xs text-green-500 mt-0.5">{{ __('From returns') }}</div>
-								</div>
-								<!-- Net Balance (dominant) -->
+								<!-- Remaining (dominant) -->
 								<div
 									class="rounded-xl p-4 text-center border-2"
-									:class="statement.summary.net_balance > 0
+									:class="statement.summary.total_outstanding > 0
 										? 'bg-orange-50 border-orange-300'
 										: 'bg-green-50 border-green-300'"
 								>
-									<div class="text-xs font-medium mb-1" :class="statement.summary.net_balance > 0 ? 'text-orange-600' : 'text-green-600'">
-										{{ __('Net Balance') }}
+									<div class="text-xs font-medium mb-1" :class="statement.summary.total_outstanding > 0 ? 'text-orange-600' : 'text-green-600'">
+										{{ __('Remaining') }}
 									</div>
-									<div class="text-2xl font-bold" :class="statement.summary.net_balance > 0 ? 'text-orange-700' : 'text-green-700'">
-										{{ formatCurrency(Math.abs(statement.summary.net_balance)) }}
+									<div class="text-2xl font-bold" :class="statement.summary.total_outstanding > 0 ? 'text-orange-700' : 'text-green-700'">
+										{{ formatCurrency(statement.summary.total_outstanding) }}
 									</div>
-									<div class="text-xs mt-0.5" :class="statement.summary.net_balance > 0 ? 'text-orange-500' : 'text-green-500'">
-										{{ statement.summary.net_balance > 0 ? __('Owes') : __('In credit') }}
+									<div class="text-xs mt-0.5" :class="statement.summary.total_outstanding > 0 ? 'text-orange-500' : 'text-green-500'">
+										{{ statement.summary.total_outstanding > 0 ? __('Still owed') : __('All settled') }}
 									</div>
 								</div>
 							</div>
@@ -309,11 +303,25 @@
 							<div v-else-if="activeTab === 'items'" class="space-y-4">
 
 								<!-- Headline -->
-								<div class="bg-orange-50 border-2 border-orange-300 rounded-xl p-4 text-center">
-									<div class="text-xs font-medium text-orange-600 mb-1">{{ __('Total owed: {0}', [formatCurrency(statement.summary.net_balance)]) }}</div>
-									<div class="text-sm text-gray-600">
-										{{ __('{0} took {1} item(s) on credit', [customerName || customer, creditItems.length]) }}
+								<div class="flex items-start justify-between gap-3">
+									<div class="flex-1 bg-orange-50 border-2 border-orange-300 rounded-xl p-4 text-center">
+										<div class="text-xs font-medium text-orange-600 mb-1">{{ __('Total owed: {0}', [formatCurrency(statement.summary.net_balance)]) }}</div>
+										<div class="text-sm text-gray-600">
+											{{ __('{0} took {1} item(s) on credit', [customerName || customer, creditItems.length]) }}
+										</div>
 									</div>
+									<button
+										type="button"
+										@click="downloadStatementPdf"
+										:disabled="creditItems.length === 0"
+										class="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 active:bg-gray-300 transition-colors flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+										:title="__('Download PDF')"
+									>
+										<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+										</svg>
+										{{ __('Download PDF') }}
+									</button>
 								</div>
 
 								<!-- Items table -->
@@ -398,6 +406,7 @@ import {
 	formatCurrency as formatCurrencyUtil,
 } from "@/utils/currency"
 import { isOffline } from "@/utils/offline/offlineState"
+import { printCustomerStatement } from "@/utils/printCustomerStatement"
 import { call, LoadingIndicator } from "frappe-ui"
 import { computed, ref, watch } from "vue"
 import { __ } from "@/utils/translation"
@@ -464,6 +473,12 @@ const allInvoices = computed(() => {
 		...(statement.value.due_invoices || []),
 		...(statement.value.settled_invoices || []),
 	]
+})
+
+const dueInvoicedTotal = computed(() => {
+	if (!statement.value) return 0
+	return (statement.value.due_invoices || [])
+		.reduce((s, i) => s + Number.parseFloat(i.grand_total || 0), 0)
 })
 
 const filterChips = computed(() => [
@@ -635,6 +650,20 @@ async function handleSinglePaymentCompleted(paymentData) {
 		emit("payment-completed")
 	} catch (error) {
 		showError(error.message || __("Payment failed"))
+	}
+}
+
+function downloadStatementPdf() {
+	try {
+		printCustomerStatement({
+			companyName: props.company,
+			customerName: customerName.value || customerId.value,
+			currency: props.currency,
+			summary: statement.value.summary,
+			creditItems: creditItems.value,
+		})
+	} catch (e) {
+		showError(e.message || __("Popup blocked — check your browser settings."))
 	}
 }
 

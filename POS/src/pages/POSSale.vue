@@ -397,6 +397,7 @@
 								@select-customer="handleCustomerSelected"
 								@create-customer="handleCreateCustomer"
 								@edit-customer="handleEditCustomer"
+								@view-customer-dues="handleViewCustomerDues"
 								@proceed-to-payment="handleProceedToPayment"
 								@clear-cart="handleClearCart"
 								@save-draft="handleSaveDraft"
@@ -3065,6 +3066,14 @@ function handleManagementMenuClick(menuItem) {
 // Drill from the Credit Sales summary into a customer's account statement.
 // The summary dialog stays open underneath; the statement (z-[300]) covers it.
 function handleCreditSummarySelect(customerId) {
+	customerForDues.value = customerId;
+	showCustomerDues.value = true;
+}
+
+// Open the account statement for the currently selected customer directly from the cart.
+function handleViewCustomerDues(customer) {
+	const customerId = customer?.name || customer;
+	if (!customerId) return;
 	customerForDues.value = customerId;
 	showCustomerDues.value = true;
 }

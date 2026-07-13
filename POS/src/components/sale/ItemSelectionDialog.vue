@@ -745,10 +745,15 @@ async function loadOptions() {
 				props.item?.uom && props.item.uom !== props.item.stock_uom
 					? props.item.uom
 					: null;
+			const salesUom =
+				props.item?.sales_uom && props.item.sales_uom !== props.item.stock_uom
+					? props.item.sales_uom
+					: null;
 			const preferredUom =
 				props.item?.resolved_uom ||
 				scannedUom ||
-				(barcodeUoms.length === 1 ? barcodeUoms[0] : null);
+				(barcodeUoms.length === 1 ? barcodeUoms[0] : null) ||
+				salesUom;
 
 			const matchingOption = preferredUom
 				? options.value.find((opt) => opt.uom === preferredUom)

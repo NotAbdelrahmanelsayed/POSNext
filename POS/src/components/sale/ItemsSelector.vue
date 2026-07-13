@@ -579,7 +579,7 @@
 								<span class="text-gray-400"
 									>/
 									{{
-										item.uom || item.stock_uom || __("Nos", null, "UOM")
+										item.sales_uom || item.uom || item.stock_uom || __("Nos", null, "UOM")
 									}}</span
 								>
 							</p>
@@ -894,7 +894,7 @@
 								class="hidden md:table-cell px-2 sm:px-3 py-2 whitespace-nowrap md:w-[80px]"
 							>
 								<div class="text-xs sm:text-sm text-gray-500">
-									{{ item.uom || item.stock_uom || __("Nos", null, "UOM") }}
+									{{ item.sales_uom || item.uom || item.stock_uom || __("Nos", null, "UOM") }}
 								</div>
 							</td>
 						</tr>
