@@ -900,6 +900,7 @@ import { usePOSSettingsStore } from "../stores/posSettings";
 import { usePOSShiftStore } from "../stores/posShift";
 import { printEODReport } from "../utils/printEod";
 import TranslatedHTML from "./common/TranslatedHTML.vue";
+import { useDialogSubmit } from "../composables/useDialogSubmit";
 
 const props = defineProps({
 	modelValue: {
@@ -1212,6 +1213,12 @@ function getShiftDuration() {
 	}
 	return __("{0}m", [minutes]);
 }
+
+useDialogSubmit({
+	isOpen: open,
+	onSubmit: submitClosing,
+	canSubmit: () => !showSuccessReport.value && canSubmit.value && !submitResource.loading,
+});
 
 function getPaymentIcon(method) {
 	const methodLower = method.toLowerCase();

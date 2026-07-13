@@ -147,6 +147,7 @@ import { normalizeSearchText } from "@/utils/searchText"
 import { __ } from "@/utils/translation"
 import { call } from "frappe-ui"
 import { computed, ref, watch } from "vue"
+import { useDialogSubmit } from "@/composables/useDialogSubmit"
 
 const props = defineProps({
 	modelValue: Boolean,
@@ -216,6 +217,14 @@ async function loadSummary() {
 function handleClose() {
 	show.value = false
 }
+
+useDialogSubmit({
+	isOpen: show,
+	onSubmit: () => {},
+	enter: false,
+	ctrlS: false,
+	onEscape: handleClose,
+})
 
 function formatCurrency(amount) {
 	const cur = summary.value?.currency || props.currency

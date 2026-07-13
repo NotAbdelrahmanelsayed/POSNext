@@ -205,6 +205,7 @@ import { useToast } from "@/composables/useToast";
 import { usePOSShiftStore } from "@/stores/posShift";
 import { Button, Dialog } from "frappe-ui";
 import { onMounted, ref, watch } from "vue";
+import { useDialogSubmit } from "@/composables/useDialogSubmit";
 
 const { showSuccess, showError } = useToast();
 const shiftStore = usePOSShiftStore();
@@ -318,6 +319,16 @@ async function confirmClearAll() {
 		showError(__("Failed to clear drafts"));
 	}
 }
+
+useDialogSubmit({
+	isOpen: showDeleteDialog,
+	onSubmit: confirmDeleteDraft,
+});
+
+useDialogSubmit({
+	isOpen: showClearAllDialog,
+	onSubmit: confirmClearAll,
+});
 
 function formatDateTime(dateStr) {
 	const date = new Date(dateStr);

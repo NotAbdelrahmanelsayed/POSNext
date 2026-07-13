@@ -12,7 +12,6 @@
 				v-if="modelValue"
 				class="fixed inset-0 z-[200] flex items-center justify-center p-4"
 				@click.self="close"
-				@keydown.escape="close"
 				role="dialog"
 				aria-modal="true"
 				:aria-label="__('Keyboard shortcuts')"
@@ -83,8 +82,9 @@
 
 <script setup>
 import { getShortcutGroups } from "@/config/shortcuts"
+import { useDialogSubmit } from "@/composables/useDialogSubmit"
 import { __ } from "@/utils/translation"
-import { nextTick, ref, watch } from "vue"
+import { computed, nextTick, ref, watch } from "vue"
 
 const props = defineProps({
 	modelValue: Boolean,
@@ -98,6 +98,14 @@ const shortcutGroups = getShortcutGroups()
 function close() {
 	emit("update:modelValue", false)
 }
+
+useDialogSubmit({
+	isOpen: computed(() => props.modelValue),
+	onSubmit: () => {},
+	enter: false,
+	ctrlS: false,
+	onEscape: close,
+})
 
 watch(
 	() => props.modelValue,

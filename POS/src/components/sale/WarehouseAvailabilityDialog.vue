@@ -854,6 +854,7 @@
  */
 import { ref, computed, watch, nextTick } from "vue";
 import { call, Dialog } from "frappe-ui";
+import { useDialogSubmit } from "@/composables/useDialogSubmit";
 import { __ } from "@/utils/translation";
 
 const props = defineProps({
@@ -1289,6 +1290,12 @@ function selectAllVariants() {
 function deselectAllVariants() {
 	selectedVariants.value = [];
 }
+
+useDialogSubmit({
+	isOpen: show,
+	onSubmit: confirmVariantSelection,
+	canSubmit: () => showVariantSelection.value && selectedVariants.value.length > 0,
+});
 
 async function loadAvailability() {
 	const targetItemCode = isSearchMode.value ? selectedItemCode.value : props.itemCode;

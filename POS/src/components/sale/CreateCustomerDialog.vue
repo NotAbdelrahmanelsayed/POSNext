@@ -282,6 +282,7 @@ import { usePOSPermissions } from "@/composables/usePermissions";
 import { useToast } from "@/composables/useToast";
 import { useCountriesStore } from "@/stores/countries";
 import { logger } from "@/utils/logger";
+import { useDialogSubmit } from "@/composables/useDialogSubmit";
 import { Button, Dialog, Input, createResource } from "frappe-ui";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
@@ -765,6 +766,18 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
 	document.removeEventListener("click", handleClickOutside);
+});
+
+useDialogSubmit({
+	isOpen: show,
+	onSubmit: handleCreate,
+	canSubmit: () =>
+		!!customerData.value.customer_name &&
+		hasPermission.value &&
+		!createCustomerResource.loading &&
+		!updateCustomerResource.loading &&
+		!checkingPermission.value &&
+		!showCountryDropdown.value,
 });
 </script>
 

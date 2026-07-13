@@ -303,6 +303,7 @@ import { useSerialNumberStore } from "@/stores/serialNumber";
 import { usePOSCartStore } from "@/stores/posCart";
 import { getCachedBatchData, getCachedSerialData } from "@/utils/offline/items";
 import { isOffline } from "@/utils/offline";
+import { useDialogSubmit } from "@/composables/useDialogSubmit";
 
 const props = defineProps({
 	modelValue: Boolean,
@@ -490,6 +491,12 @@ function selectAllSerials() {
 function clearAllSerials() {
 	selectedSerials.value = [];
 }
+
+useDialogSubmit({
+	isOpen: show,
+	onSubmit: handleConfirm,
+	canSubmit: () => isValid.value,
+});
 
 function handleConfirm() {
 	const result = {};

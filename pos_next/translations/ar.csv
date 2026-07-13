@@ -1636,3 +1636,5 @@ Points applied: {0}. Please pay remaining {1} with {2},تم خصم النقاط:
 "Barcode scanner button starts enabled when the POS loads","يبدأ زر الماسح الضوئي مفعلاً عند تحميل نقطة البيع",""
 "Auto-Add Enabled by Default","تفعيل الإضافة التلقائية افتراضياً",""
 "Auto-Add (+) button starts enabled when the POS loads","يبدأ زر الإضافة التلقائية (+) مفعلاً عند تحميل نقطة البيع",""
+"Confirm dialog","تأكيد النافذة",""
+"Dialogs","النوافذ",""

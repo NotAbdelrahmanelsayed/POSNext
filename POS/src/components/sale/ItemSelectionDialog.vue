@@ -203,7 +203,6 @@
 									inputmode="numeric"
 									class="w-full text-center border-0 text-sm font-semibold focus:outline-none focus:ring-0 bg-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
 									@blur="validateQuantity"
-									@keydown.enter="confirm"
 								/>
 							</div>
 							<button
@@ -291,7 +290,6 @@
 									inputmode="numeric"
 									class="w-full text-center border-0 text-sm font-semibold focus:outline-none focus:ring-0 bg-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
 									@blur="validateQuantity"
-									@keydown.enter="confirm"
 								/>
 							</div>
 							<button
@@ -348,7 +346,6 @@
 									inputmode="numeric"
 									class="w-full text-center border-0 text-sm font-semibold focus:outline-none focus:ring-0 bg-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
 									@blur="validateQuantity"
-									@keydown.enter="confirm"
 								/>
 							</div>
 							<button
@@ -484,6 +481,7 @@ import { computed, nextTick, ref, watch } from "vue";
 import TranslatedHTML from "../common/TranslatedHTML.vue";
 import { offlineState } from "@/utils/offline/offlineState";
 import { getCachedVariants, cacheItems } from "@/utils/offline/items";
+import { useDialogSubmit } from "@/composables/useDialogSubmit";
 
 const props = defineProps({
 	modelValue: Boolean,
@@ -854,4 +852,10 @@ function cancel() {
 function formatCurrency(amount) {
 	return formatCurrencyUtil(Number.parseFloat(amount || 0), props.currency);
 }
+
+useDialogSubmit({
+	isOpen,
+	onSubmit: confirm,
+	canSubmit: () => !!selectedOption.value,
+});
 </script>

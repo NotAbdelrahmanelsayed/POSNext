@@ -422,6 +422,7 @@
 import { DEFAULT_CURRENCY, formatCurrency as formatCurrencyUtil } from "@/utils/currency";
 import { Button, Dialog } from "frappe-ui";
 import { computed, ref, watch } from "vue";
+import { useDialogSubmit } from "@/composables/useDialogSubmit";
 
 const props = defineProps({
 	modelValue: Boolean,
@@ -547,4 +548,9 @@ async function confirmDelete() {
 		emit("delete-invoice", invoiceId);
 	}
 }
+
+useDialogSubmit({
+	isOpen: showDeleteConfirm,
+	onSubmit: confirmDelete,
+});
 </script>

@@ -491,6 +491,7 @@ import { logger } from "@/utils/logger";
 import { hydrateLocalOnlyInvoice, isLocalOnlyInvoiceName } from "@/utils/printInvoice";
 import { Button, Dialog, call } from "frappe-ui";
 import { ref, watch, nextTick, computed } from "vue";
+import { useDialogSubmit } from "@/composables/useDialogSubmit";
 
 const log = logger.create("InvoiceDetailDialog");
 const { formatDate, formatTime } = useFormatters();
@@ -621,4 +622,10 @@ function handlePrint() {
 	if (!invoiceData.value) return;
 	emit("print-invoice", invoiceData.value);
 }
+
+useDialogSubmit({
+	isOpen: show,
+	onSubmit: handlePrint,
+	canSubmit: () => !!invoiceData.value,
+});
 </script>
