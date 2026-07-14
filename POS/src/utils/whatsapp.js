@@ -91,17 +91,21 @@ export async function shareStatementImage({
 				type: blob.type || "image/png",
 			})
 
+			// canShare() can return true even when the OS has no working share target for
+			// this content, so don't close the fallback window until share() actually
+			// succeeds — otherwise a failed share leaves nothing to fall back to.
 			if (navigator.canShare({ files: [file] })) {
-				windowHandle?.close()
 				await navigator.share({ files: [file], text: message })
+				windowHandle?.close()
 				return
 			}
 		} catch (error) {
 			if (error?.name === "AbortError") {
-				// User dismissed the share sheet — not a failure.
+				// User dismissed the share sheet — not a failure, don't fall back.
+				windowHandle?.close()
 				return
 			}
-			// Fall through to the wa.me fallback below.
+			// Real failure (share rejected, fetch failed, etc.) — fall through to wa.me.
 		}
 	}
 
@@ -110,7 +114,7 @@ export async function shareStatementImage({
 		? `https://wa.me/${phone}?text=${text}`
 		: `https://wa.me/?text=${text}`
 
-	if (windowHandle) {
+	if (windowHandle && !windowHandle.closed) {
 		windowHandle.location.href = waUrl
 	} else {
 		window.open(waUrl, "_blank")
