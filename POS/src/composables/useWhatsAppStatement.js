@@ -37,7 +37,7 @@ export function useWhatsAppStatement() {
 
 	async function shareStatement(
 		customer,
-		{ company, posProfile, currency, customerName } = {},
+		{ company, posProfile, currency } = {},
 	) {
 		if (sharingCustomer.value) return
 
@@ -57,8 +57,6 @@ export function useWhatsAppStatement() {
 
 			const fmt = (val) => formatMessageAmount(val, result.currency || currency)
 			const message = buildStatementMessage({
-				customerName: result.customer_name || customerName || customerId,
-				companyName: company,
 				totalAmount: fmt(result.total_amount),
 				paid: fmt(result.paid),
 				outstanding: fmt(result.outstanding),

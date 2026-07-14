@@ -70,16 +70,8 @@ export function toWhatsAppNumber(raw, defaultCountryCode = "20") {
  * Build the WhatsApp message text for a customer statement, with the same
  * total/paid/remaining breakdown shown on the statement image itself.
  */
-export function buildStatementMessage({
-	customerName,
-	companyName,
-	totalAmount,
-	paid,
-	outstanding,
-}) {
+export function buildStatementMessage({ totalAmount, paid, outstanding }) {
 	return [
-		__("Hello {0}", [customerName]),
-		__("Statement from {0}", [companyName]),
 		__("Total taken: {0}", [totalAmount]),
 		__("Total paid: {0}", [paid]),
 		__("Total remaining: {0}", [outstanding]),
