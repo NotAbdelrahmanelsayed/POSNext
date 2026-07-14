@@ -1,11 +1,11 @@
 import { ref } from "vue"
 import { call } from "frappe-ui"
 import { useToast } from "@/composables/useToast"
-import { formatCurrency } from "@/utils/currency"
 import { __ } from "@/utils/translation"
 import {
 	buildStatementMessage,
 	downloadStatementImage,
+	formatMessageAmount,
 	shareStatementImage,
 	toWhatsAppNumber,
 } from "@/utils/whatsapp"
@@ -55,7 +55,7 @@ export function useWhatsAppStatement() {
 		try {
 			const result = await fetchStatement(customerId, { company, posProfile })
 
-			const fmt = (val) => formatCurrency(val, result.currency || currency)
+			const fmt = (val) => formatMessageAmount(val, result.currency || currency)
 			const message = buildStatementMessage({
 				customerName: result.customer_name || customerName || customerId,
 				companyName: company,

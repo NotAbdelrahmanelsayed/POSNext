@@ -1,4 +1,23 @@
+import { formatCurrency } from "@/utils/currency"
 import { __ } from "@/utils/translation"
+
+// The shared formatCurrency() util renders EGP as "E£", matching the rest of the POS UI.
+// A WhatsApp message read by an Egyptian customer reads more naturally with the spelled-out
+// "جنيه" instead — scoped to this message only, not a site-wide currency display change.
+const MESSAGE_CURRENCY_NAMES = {
+	EGP: "جنيه",
+}
+
+/** Format an amount for the WhatsApp message text (spelled-out currency name where we have one). */
+export function formatMessageAmount(value, currency) {
+	const name = MESSAGE_CURRENCY_NAMES[currency]
+	if (!name) return formatCurrency(value, currency)
+	const amount = Number.parseFloat(value || 0).toLocaleString("en-US", {
+		minimumFractionDigits: 2,
+		maximumFractionDigits: 2,
+	})
+	return `${amount} ${name}`
+}
 
 /**
  * Normalize a raw phone number into digits-only, WhatsApp-ready form.
