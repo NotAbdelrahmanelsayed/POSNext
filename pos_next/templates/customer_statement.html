@@ -53,7 +53,7 @@ td:not(:first-child) { text-align: {{ text_align_end }}; }
         {% for item in items %}
         <tr>
           <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;">{{ item.item_name or item.item_code }}</td>
-          <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;white-space:nowrap;">{{ item.total_qty }} {{ item.uom or "" }}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;white-space:nowrap;">{{ item.total_qty }} {{ "" if item.uom == "Nos" else (item.uom or "") }}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;font-weight:600;">{{ item.total_amount_formatted }}</td>
         </tr>
         {% endfor %}

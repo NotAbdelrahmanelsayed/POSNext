@@ -51,6 +51,18 @@
 							</button>
 							<button
 								type="button"
+								@click="downloadStatementImageToDevice"
+								:disabled="creditItems.length === 0 || !!downloadingCustomer || isOffline()"
+								class="p-2 text-gray-500 hover:bg-gray-100 active:bg-gray-200 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+								:title="__('Download Image')"
+							>
+								<LoadingIndicator v-if="downloadingCustomer" class="w-5 h-5"/>
+								<svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/>
+								</svg>
+							</button>
+							<button
+								type="button"
 								@click="loadStatement"
 								:disabled="loading"
 								class="p-2 text-gray-500 hover:bg-gray-100 active:bg-gray-200 rounded-lg transition-colors"
@@ -562,7 +574,12 @@ const emit = defineEmits([
 
 const { showSuccess, showError } = useToast()
 const { currentShift } = useShift()
-const { sharingCustomer, shareStatement } = useWhatsAppStatement()
+const {
+	sharingCustomer,
+	downloadingCustomer,
+	shareStatement,
+	downloadStatement,
+} = useWhatsAppStatement()
 
 const show = computed({
 	get: () => props.modelValue,
@@ -897,6 +914,13 @@ function shareViaWhatsApp() {
 		posProfile: props.posProfile,
 		currency: props.currency,
 		customerName: customerName.value,
+	})
+}
+
+function downloadStatementImageToDevice() {
+	downloadStatement(customerId.value, {
+		company: props.company,
+		posProfile: props.posProfile,
 	})
 }
 

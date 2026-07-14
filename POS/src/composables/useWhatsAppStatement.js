@@ -5,18 +5,35 @@ import { formatCurrency } from "@/utils/currency"
 import { __ } from "@/utils/translation"
 import {
 	buildStatementMessage,
+	downloadStatementImage,
 	shareStatementImage,
 	toWhatsAppNumber,
 } from "@/utils/whatsapp"
 
+function resolveCustomerId(customer) {
+	return typeof customer === "object"
+		? customer.name || customer.customer
+		: customer
+}
+
 /**
- * Shared "Send via WhatsApp" logic for CustomerDuesDialog and CreditSalesSummaryDialog.
- * Attaches the real statement image where the Web Share API supports it, otherwise
- * falls back to a wa.me link carrying the message and a public image URL.
+ * Shared "Send via WhatsApp" / "Download image" logic for CustomerDuesDialog and
+ * CreditSalesSummaryDialog. Attaches the real statement image where the Web Share API
+ * supports it, copies it to the clipboard as a next-best option, and always falls back
+ * to a wa.me link carrying the message and a public image URL.
  */
 export function useWhatsAppStatement() {
-	const { showError } = useToast()
+	const { showSuccess, showError } = useToast()
 	const sharingCustomer = ref(null)
+	const downloadingCustomer = ref(null)
+
+	async function fetchStatement(customerId, { company, posProfile }) {
+		return call("pos_next.api.customer_statement.share_customer_statement", {
+			customer: customerId,
+			pos_profile: posProfile || undefined,
+			company: company || undefined,
+		})
+	}
 
 	async function shareStatement(
 		customer,
@@ -24,10 +41,7 @@ export function useWhatsAppStatement() {
 	) {
 		if (sharingCustomer.value) return
 
-		const customerId =
-			typeof customer === "object"
-				? customer.name || customer.customer
-				: customer
+		const customerId = resolveCustomerId(customer)
 		sharingCustomer.value = customerId
 
 		// Must open synchronously, before any await, or popup blockers kill it.
@@ -39,32 +53,28 @@ export function useWhatsAppStatement() {
 		}
 
 		try {
-			const result = await call(
-				"pos_next.api.customer_statement.share_customer_statement",
-				{
-					customer: customerId,
-					pos_profile: posProfile || undefined,
-					company: company || undefined,
-				},
-			)
+			const result = await fetchStatement(customerId, { company, posProfile })
 
-			const phone = toWhatsAppNumber(result.mobile_no)
+			const fmt = (val) => formatCurrency(val, result.currency || currency)
 			const message = buildStatementMessage({
 				customerName: result.customer_name || customerName || customerId,
 				companyName: company,
-				outstanding: formatCurrency(
-					result.outstanding,
-					result.currency || currency,
-				),
+				totalAmount: fmt(result.total_amount),
+				paid: fmt(result.paid),
+				outstanding: fmt(result.outstanding),
 			})
 
-			await shareStatementImage({
+			const { method } = await shareStatementImage({
 				imageUrl: result.image_url,
 				fileName: result.file_name,
 				message,
-				phone,
+				phone: toWhatsAppNumber(result.mobile_no),
 				windowHandle,
 			})
+
+			if (method === "clipboard") {
+				showSuccess(__("Image copied — paste it into the chat"))
+			}
 		} catch (error) {
 			windowHandle.close()
 			showError(error.message || __("Failed to share statement"))
@@ -73,5 +83,26 @@ export function useWhatsAppStatement() {
 		}
 	}
 
-	return { sharingCustomer, shareStatement }
+	async function downloadStatement(customer, { company, posProfile } = {}) {
+		if (downloadingCustomer.value) return
+
+		const customerId = resolveCustomerId(customer)
+		downloadingCustomer.value = customerId
+
+		try {
+			const result = await fetchStatement(customerId, { company, posProfile })
+			await downloadStatementImage(result.image_url, result.file_name)
+		} catch (error) {
+			showError(error.message || __("Failed to download image"))
+		} finally {
+			downloadingCustomer.value = null
+		}
+	}
+
+	return {
+		sharingCustomer,
+		downloadingCustomer,
+		shareStatement,
+		downloadStatement,
+	}
 }

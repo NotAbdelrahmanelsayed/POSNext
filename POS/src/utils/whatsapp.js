@@ -48,33 +48,48 @@ export function toWhatsAppNumber(raw, defaultCountryCode = "20") {
 }
 
 /**
- * Build the WhatsApp message text for a customer statement.
- * The URL line is omitted when the image is being attached natively (Web Share API) —
- * it would be redundant noise in the chat since the image is already attached.
+ * Build the WhatsApp message text for a customer statement, with the same
+ * total/paid/remaining breakdown shown on the statement image itself.
  */
 export function buildStatementMessage({
 	customerName,
 	companyName,
+	totalAmount,
+	paid,
 	outstanding,
-	url,
 }) {
-	const lines = [
+	return [
 		__("Hello {0}", [customerName]),
 		__("Statement from {0}", [companyName]),
-		__("Outstanding balance: {0}", [outstanding]),
-	]
-	if (url) {
-		lines.push(url)
+		__("Total taken: {0}", [totalAmount]),
+		__("Total paid: {0}", [paid]),
+		__("Total remaining: {0}", [outstanding]),
+	].join("\n")
+}
+
+/** Copy an image blob to the clipboard so it can be pasted (Ctrl+V) directly into a chat. */
+async function copyImageToClipboard(blob) {
+	if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined")
+		return false
+	try {
+		await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })])
+		return true
+	} catch {
+		return false
 	}
-	return lines.join("\n")
 }
 
 /**
- * Share a customer statement over WhatsApp: attach the real PNG via the Web Share API
- * where supported, otherwise fall back to a wa.me link carrying the message + public URL.
+ * Share a customer statement over WhatsApp, trying the best available attachment method:
+ *  1. Web Share API with the real file — attaches the actual image (mobile/some desktop browsers).
+ *  2. Clipboard image copy — the image isn't attached to the wa.me link, but the cashier can
+ *     paste (Ctrl+V) it straight into the chat once WhatsApp opens.
+ *  3. Plain link — always included as a fallback so the customer can open the statement
+ *     even if the image was never attached or pasted.
  *
  * @param windowHandle - a window opened synchronously in the click handler (popup-blocker workaround).
  *   Navigated to the wa.me fallback, or closed once native sharing takes over.
+ * @returns {Promise<{method: "share" | "clipboard" | "link" | "cancelled"}>}
  */
 export async function shareStatementImage({
 	imageUrl,
@@ -83,10 +98,16 @@ export async function shareStatementImage({
 	phone,
 	windowHandle,
 }) {
-	if (navigator.canShare) {
+	let blob = null
+	try {
+		const response = await fetch(imageUrl)
+		blob = await response.blob()
+	} catch {
+		// Image fetch failed — fall through to a link-only message, nothing to attach.
+	}
+
+	if (blob && navigator.canShare) {
 		try {
-			const response = await fetch(imageUrl)
-			const blob = await response.blob()
 			const file = new File([blob], fileName || "statement.png", {
 				type: blob.type || "image/png",
 			})
@@ -97,19 +118,23 @@ export async function shareStatementImage({
 			if (navigator.canShare({ files: [file] })) {
 				await navigator.share({ files: [file], text: message })
 				windowHandle?.close()
-				return
+				return { method: "share" }
 			}
 		} catch (error) {
 			if (error?.name === "AbortError") {
 				// User dismissed the share sheet — not a failure, don't fall back.
 				windowHandle?.close()
-				return
+				return { method: "cancelled" }
 			}
-			// Real failure (share rejected, fetch failed, etc.) — fall through to wa.me.
+			// Real failure (share rejected, etc.) — fall through to the link/clipboard path.
 		}
 	}
 
-	const text = encodeURIComponent(`${message}\n${imageUrl}`)
+	const copied = blob ? await copyImageToClipboard(blob) : false
+
+	const text = encodeURIComponent(
+		`${message}\n${__("For details: {0}", [imageUrl])}`,
+	)
 	const waUrl = phone
 		? `https://wa.me/${phone}?text=${text}`
 		: `https://wa.me/?text=${text}`
@@ -119,4 +144,21 @@ export async function shareStatementImage({
 	} else {
 		window.open(waUrl, "_blank")
 	}
+
+	return { method: copied ? "clipboard" : "link" }
+}
+
+/** Download a statement image to the cashier's device as a real file (not just a browser tab). */
+export async function downloadStatementImage(imageUrl, fileName) {
+	const response = await fetch(imageUrl)
+	const blob = await response.blob()
+	const objectUrl = URL.createObjectURL(blob)
+
+	const link = document.createElement("a")
+	link.href = objectUrl
+	link.download = fileName || "statement.png"
+	document.body.appendChild(link)
+	link.click()
+	link.remove()
+	URL.revokeObjectURL(objectUrl)
 }

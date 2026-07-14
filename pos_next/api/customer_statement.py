@@ -35,6 +35,8 @@ def share_customer_statement(customer, pos_profile=None, company=None):
 		    file_name: str,
 		    mobile_no: str | None,
 		    customer_name: str,
+		    total_amount: float,  # total value of items on credit
+		    paid: float,
 		    outstanding: float,
 		    currency: str,
 		}
@@ -112,6 +114,8 @@ def share_customer_statement(customer, pos_profile=None, company=None):
 		"file_name": file_doc.file_name,
 		"mobile_no": mobile_no,
 		"customer_name": customer_name or customer,
+		"total_amount": total_amount,
+		"paid": paid,
 		"outstanding": outstanding,
 		"currency": currency,
 	}
