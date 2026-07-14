@@ -38,6 +38,19 @@
 							</button>
 							<button
 								type="button"
+								@click="shareViaWhatsApp"
+								:disabled="creditItems.length === 0 || !!sharingCustomer || isOffline()"
+								class="p-2 text-gray-500 hover:bg-gray-100 active:bg-gray-200 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+								:title="__('Send via WhatsApp')"
+							>
+								<LoadingIndicator v-if="sharingCustomer" class="w-5 h-5"/>
+								<svg v-else class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+									<path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+									<path d="M12.001 2C6.478 2 2 6.477 2 12c0 1.876.512 3.633 1.404 5.14L2 22l4.995-1.378A9.955 9.955 0 0012.001 22C17.523 22 22 17.523 22 12S17.523 2 12.001 2zm0 18.09a8.05 8.05 0 01-4.29-1.238l-.307-.183-3.076.849.83-3.023-.2-.311A8.05 8.05 0 013.91 12c0-4.462 3.63-8.091 8.091-8.091 4.462 0 8.091 3.63 8.091 8.091 0 4.462-3.629 8.09-8.091 8.09z"/>
+								</svg>
+							</button>
+							<button
+								type="button"
 								@click="loadStatement"
 								:disabled="loading"
 								class="p-2 text-gray-500 hover:bg-gray-100 active:bg-gray-200 rounded-lg transition-colors"
@@ -519,6 +532,7 @@ import {
 } from "@/utils/currency"
 import { isOffline } from "@/utils/offline/offlineState"
 import { printCustomerStatement } from "@/utils/printCustomerStatement"
+import { useWhatsAppStatement } from "@/composables/useWhatsAppStatement"
 import { call, LoadingIndicator } from "frappe-ui"
 import { computed, ref, watch } from "vue"
 import { __ } from "@/utils/translation"
@@ -548,6 +562,7 @@ const emit = defineEmits([
 
 const { showSuccess, showError } = useToast()
 const { currentShift } = useShift()
+const { sharingCustomer, shareStatement } = useWhatsAppStatement()
 
 const show = computed({
 	get: () => props.modelValue,
@@ -874,6 +889,15 @@ async function handleSinglePaymentCompleted(paymentData) {
 	} catch (error) {
 		showError(error.message || __("Payment failed"))
 	}
+}
+
+function shareViaWhatsApp() {
+	shareStatement(customerId.value, {
+		company: props.company,
+		posProfile: props.posProfile,
+		currency: props.currency,
+		customerName: customerName.value,
+	})
 }
 
 function downloadStatementPdf() {

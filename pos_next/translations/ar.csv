@@ -1720,3 +1720,8 @@ Points applied: {0}. Please pay remaining {1} with {2},تم خصم النقاط:
 "Total owed","إجمالي المستحق",""
 "Items on invoices that still have a balance — not weighted by what has already been paid.","أصناف في فواتير لا يزال عليها رصيد مستحق — غير مرجحة بما تم دفعه بالفعل.",""
 "Unable to load shift data. Please check your connection and try again.","تعذر تحميل بيانات الوردية. يرجى التحقق من اتصالك والمحاولة مرة أخرى.",""
+"Send via WhatsApp","إرسال عبر واتساب",""
+"Hello {0}","مرحباً {0}",""
+"Statement from {0}","كشف حساب من {0}",""
+"Outstanding balance: {0}","الرصيد المستحق: {0}",""
+"Failed to share statement","فشل إرسال كشف الحساب",""

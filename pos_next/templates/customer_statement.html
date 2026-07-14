@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html dir="{{ dir }}" lang="{{ lang }}">
+<head>
+<meta charset="UTF-8">
+<title>{{ _("Customer Statement") }}</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'DejaVu Sans', 'Tahoma', 'Arial', sans-serif; color: #1a1a1a; background: #fff; padding: 0; }
+.page { max-width: 780px; margin: 0 auto; padding: 20px; }
+.header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid #e5e7eb; }
+.company { font-size: 20px; font-weight: 700; color: #111; }
+.doc-title { font-size: 14px; color: #6b7280; margin-top: 4px; }
+.meta { text-align: {{ text_align_end }}; font-size: 13px; color: #374151; }
+.meta strong { display: block; font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 0; }
+thead tr { background: #f9fafb; }
+th { padding: 10px 12px; text-align: {{ text_align }}; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; border-bottom: 1px solid #e5e7eb; }
+th:not(:first-child) { text-align: {{ text_align_end }}; }
+td { text-align: {{ text_align }}; }
+td:not(:first-child) { text-align: {{ text_align_end }}; }
+.table-wrapper { border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; margin-bottom: 16px; }
+.summary { border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; margin-top: 16px; }
+.summary-row { display: flex; justify-content: space-between; padding: 10px 16px; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
+.summary-row:last-child { border-bottom: none; }
+.summary-row.net { font-weight: 700; font-size: 15px; background: #fff7ed; }
+.summary-label { color: #6b7280; }
+.summary-value { font-weight: 600; }
+.doc-footer { margin-top: 24px; padding-top: 16px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 11px; color: #9ca3af; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="header">
+    <div>
+      <div class="company">{{ company_name or "" }}</div>
+      <div class="doc-title">{{ _("Customer Statement") }}</div>
+    </div>
+    <div class="meta">
+      <strong>{{ customer_name or "" }}</strong>
+      {{ statement_date }}
+    </div>
+  </div>
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>{{ _("Item") }}</th>
+          <th>{{ _("Qty") }}</th>
+          <th>{{ _("Amount") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;">{{ item.item_name or item.item_code }}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;white-space:nowrap;">{{ item.total_qty }} {{ item.uom or "" }}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;font-weight:600;">{{ item.total_amount_formatted }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="summary">
+    <div class="summary-row"><span class="summary-label">{{ _("Total") }}</span><span class="summary-value">{{ total_amount_formatted }}</span></div>
+    <div class="summary-row"><span class="summary-label">{{ _("Paid") }}</span><span class="summary-value">{{ paid_formatted }}</span></div>
+    <div class="summary-row net"><span class="summary-label">{{ _("Remaining") }}</span><span class="summary-value">{{ outstanding_formatted }}</span></div>
+  </div>
+  <div class="doc-footer">Powered by <strong>Abdelrahman Elsayed 01000488181</strong></div>
+</div>
+</body>
+</html>
