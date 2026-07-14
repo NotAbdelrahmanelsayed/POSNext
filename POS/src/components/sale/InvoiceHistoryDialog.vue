@@ -6,10 +6,10 @@
 				<div class="flex items-center gap-2">
 					<div class="flex-1">
 						<Input
-							v-model="searchTerm"
+							:model-value="searchTerm"
 							type="text"
-							:placeholder="__('Search by invoice number or customer...')"
-							@input="searchInvoices"
+							:placeholder="__('Search by invoice number, customer, or item...')"
+							@input="searchTerm = $event"
 						>
 							<template #prefix>
 								<svg
@@ -53,7 +53,7 @@
 					<p class="mt-3 text-xs text-gray-500">{{ __("Loading invoices...") }}</p>
 				</div>
 
-				<div v-else-if="filteredInvoices.length === 0" class="text-center py-8">
+				<div v-else-if="invoices.length === 0" class="text-center py-8">
 					<svg
 						class="mx-auto h-12 w-12 text-gray-400"
 						fill="none"
@@ -72,7 +72,7 @@
 
 				<div v-else class="flex flex-col gap-2 max-h-96 overflow-y-auto pe-2">
 					<div
-						v-for="invoice in filteredInvoices"
+						v-for="invoice in invoices"
 						:key="invoice.name"
 						class="bg-white border border-gray-200 rounded-lg p-3 hover:shadow-md transition-all"
 					>
@@ -222,7 +222,7 @@ import { useFormatters } from "@/composables/useFormatters";
 import { DEFAULT_CURRENCY, formatCurrency as formatCurrencyUtil } from "@/utils/currency";
 import { getInvoiceStatusColor } from "@/utils/invoice";
 import { Button, Dialog, Input, createResource } from "frappe-ui";
-import { computed, ref, watch } from "vue";
+import { onBeforeUnmount, ref, watch } from "vue";
 import ReturnInvoiceDialog from "./ReturnInvoiceDialog.vue";
 
 const { showError } = useToast();
@@ -272,6 +272,7 @@ const invoicesResource = createResource({
 			pos_profile: props.posProfile,
 			start: page.value * pageSize,
 			limit: pageSize,
+			search_term: searchTerm.value,
 		};
 	},
 	auto: false,
@@ -308,6 +309,9 @@ watch(
 		show.value = val;
 		if (val && props.posProfile) {
 			invoicesResource.reload();
+		} else {
+			clearSearchDebounce();
+			searchTerm.value = "";
 		}
 	}
 );
@@ -323,15 +327,27 @@ watch(showReturnDialog, (val) => {
 	}
 });
 
-const filteredInvoices = computed(() => {
-	if (!searchTerm.value) return invoices.value;
+let searchDebounceTimer = null;
 
-	const term = searchTerm.value.toLowerCase();
-	return invoices.value.filter(
-		(inv) =>
-			inv.name?.toLowerCase().includes(term) ||
-			inv.customer_name?.toLowerCase().includes(term)
-	);
+function clearSearchDebounce() {
+	if (searchDebounceTimer) {
+		clearTimeout(searchDebounceTimer);
+		searchDebounceTimer = null;
+	}
+}
+
+watch(searchTerm, () => {
+	clearSearchDebounce();
+	searchDebounceTimer = setTimeout(() => {
+		searchDebounceTimer = null;
+		page.value = 0;
+		isLoadingMore.value = false;
+		invoicesResource.reload();
+	}, 300);
+});
+
+onBeforeUnmount(() => {
+	clearSearchDebounce();
 });
 
 function formatPaymentModes(invoice) {
@@ -369,10 +385,6 @@ function loadMore() {
 	page.value++;
 	isLoadingMore.value = true;
 	invoicesResource.reload();
-}
-
-function searchInvoices() {
-	// Debounced search - already filtered by computed property
 }
 
 function viewInvoice(invoice) {

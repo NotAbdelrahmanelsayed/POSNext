@@ -1624,7 +1624,7 @@ def get_invoice(invoice_name):
 
 
 @frappe.whitelist()
-def get_invoices(pos_profile: str, limit: int = 100, start: int = 0) -> list:
+def get_invoices(pos_profile: str, limit: int = 100, start: int = 0, search_term: str | None = None) -> list:
 	"""
 	Get list of invoices for a POS Profile.
 
@@ -1632,6 +1632,8 @@ def get_invoices(pos_profile: str, limit: int = 100, start: int = 0) -> list:
 		pos_profile: POS Profile name
 		limit: Maximum number of invoices to return (default 100)
 		start: Offset for pagination (default 0)
+		search_term: Optional term to match against invoice number, customer name,
+			or item code/name (min 2 chars; shorter terms are ignored)
 
 	Returns:
 		List of invoices with details
@@ -1648,35 +1650,55 @@ def get_invoices(pos_profile: str, limit: int = 100, start: int = 0) -> list:
 	if not has_access and not frappe.has_permission("Sales Invoice", "read"):
 		frappe.throw(_("You don't have access to this POS Profile"))
 
+	search_condition = ""
+	params = {"pos_profile": pos_profile, "limit": limit, "start": start}
+
+	search_term = cstr(search_term).strip()
+	if len(search_term) >= 2:
+		search_term = search_term.replace("%", r"\%").replace("_", r"\_")
+		params["term"] = f"%{search_term}%"
+		search_condition = """
+			AND (
+				si.name LIKE %(term)s
+				OR si.customer_name LIKE %(term)s
+				OR EXISTS (
+					SELECT 1 FROM `tabSales Invoice Item` sii
+					WHERE sii.parent = si.name
+						AND (sii.item_code LIKE %(term)s OR sii.item_name LIKE %(term)s)
+				)
+			)
+		"""
+
 	# Query for invoices
 	invoices = frappe.db.sql(
-		"""
+		f"""
 		SELECT
-			name,
-			customer,
-			customer_name,
-			posting_date,
-			posting_time,
-			grand_total,
-			paid_amount,
-			outstanding_amount,
-			status,
-			docstatus,
-			is_return,
-			return_against
+			si.name,
+			si.customer,
+			si.customer_name,
+			si.posting_date,
+			si.posting_time,
+			si.grand_total,
+			si.paid_amount,
+			si.outstanding_amount,
+			si.status,
+			si.docstatus,
+			si.is_return,
+			si.return_against
 		FROM
-			`tabSales Invoice`
+			`tabSales Invoice` si
 		WHERE
-			pos_profile = %(pos_profile)s
-			AND docstatus = 1
-			AND is_pos = 1
+			si.pos_profile = %(pos_profile)s
+			AND si.docstatus = 1
+			AND si.is_pos = 1
+			{search_condition}
 		ORDER BY
-			posting_date DESC,
-			posting_time DESC
+			si.posting_date DESC,
+			si.posting_time DESC
 		LIMIT %(limit)s
 		OFFSET %(start)s
 	""",
-		{"pos_profile": pos_profile, "limit": limit, "start": start},
+		params,
 		as_dict=True,
 	)
 
@@ -1709,12 +1731,12 @@ def get_invoices(pos_profile: str, limit: int = 100, start: int = 0) -> list:
 				}
 			)
 
-	# Load items for each invoice for filtering purposes
-	for invoice in invoices:
-		invoice.payments = payments_by_invoice.get(invoice.name, [])
+	items_by_invoice = {}
+	if invoice_names:
 		items = frappe.db.sql(
 			"""
 			SELECT
+				parent,
 				item_code,
 				item_name,
 				qty,
@@ -1723,14 +1745,21 @@ def get_invoices(pos_profile: str, limit: int = 100, start: int = 0) -> list:
 			FROM
 				`tabSales Invoice Item`
 			WHERE
-				parent = %(invoice_name)s
+				parent IN %(invoice_names)s
 			ORDER BY
+				parent,
 				idx
 		""",
-			{"invoice_name": invoice.name},
+			{"invoice_names": tuple(invoice_names)},
 			as_dict=True,
 		)
-		invoice.items = items
+
+		for item in items:
+			items_by_invoice.setdefault(item.parent, []).append(item)
+
+	for invoice in invoices:
+		invoice.payments = payments_by_invoice.get(invoice.name, [])
+		invoice.items = items_by_invoice.get(invoice.name, [])
 
 	return invoices
 

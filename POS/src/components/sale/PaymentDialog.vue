@@ -2,7 +2,7 @@
 	<Dialog
 		v-model="show"
 		:options="{
-			title: isSalesOrder ? __('Complete Sales Order') : __('Complete Payment'),
+			title: dialogTitle,
 			size: dynamicDialogSize,
 		}"
 	>
@@ -2039,6 +2039,7 @@ import { logger } from "@/utils/logger";
 import { Dialog, createResource, call } from "frappe-ui";
 import { computed, ref, watch, nextTick, onMounted, onUnmounted } from "vue";
 import { useToast } from "@/composables/useToast";
+import { useDialogSubmit } from "@/composables/useDialogSubmit";
 import { useLongPress } from "@/composables/useLongPress";
 import { usePaymentNumpad } from "@/composables/usePaymentNumpad";
 import { useResponsivePayment } from "@/composables/useResponsivePayment";
@@ -2124,6 +2125,15 @@ const props = defineProps({
 		type: Number,
 		default: 0,
 	},
+	/**
+	 * Optional text appended to the dialog title, e.g. "· INV-0012" or
+	 * "· 4 invoices". Lets a caller make explicit what this payment is
+	 * scoped to, so the cashier is never surprised about what they're paying.
+	 */
+	titleSuffix: {
+		type: String,
+		default: "",
+	},
 });
 
 const emit = defineEmits([
@@ -2138,6 +2148,11 @@ const show = computed({
 	get: () => props.modelValue,
 	set: (val) => emit("update:modelValue", val),
 });
+
+// Keyboard shield only: occupies the top of the useDialogSubmit stack while open so a
+// parent dialog (e.g. CustomerDuesDialog) can never receive Enter/Ctrl+S meant for this
+// dialog and mistakenly trigger its own submit handler.
+useDialogSubmit({ isOpen: show, onSubmit: () => {}, enter: false, ctrlS: false });
 
 const paymentMethods = ref([]);
 const loadingPaymentMethods = ref(false);
@@ -2171,6 +2186,10 @@ const walletPaymentMethods = ref(new Set()); // Set of mode_of_payment names tha
 const deliveryDate = ref("");
 const today = new Date().toISOString().split("T")[0];
 const isSalesOrder = computed(() => props.targetDoctype === "Sales Order");
+const dialogTitle = computed(() => {
+	const base = isSalesOrder.value ? __("Complete Sales Order") : __("Complete Payment");
+	return props.titleSuffix ? `${base} · ${props.titleSuffix}` : base;
+});
 
 // Column refs for height matching
 const rightColumnRef = ref(null);

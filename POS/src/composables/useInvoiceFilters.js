@@ -28,7 +28,13 @@ export function useInvoiceFilters(invoices) {
 				(inv) =>
 					inv.name?.toLowerCase().includes(search) ||
 					inv.customer_name?.toLowerCase().includes(search) ||
-					inv.customer?.toLowerCase().includes(search)
+					inv.customer?.toLowerCase().includes(search) ||
+					(Array.isArray(inv.items) &&
+						inv.items.some(
+							(item) =>
+								item.item_name?.toLowerCase().includes(search) ||
+								item.item_code?.toLowerCase().includes(search)
+						))
 			);
 		}
 
@@ -164,7 +170,13 @@ export function useInvoiceFilters(invoices) {
 			const matchesSearch =
 				invoice.name?.toLowerCase().includes(search) ||
 				invoice.customer_name?.toLowerCase().includes(search) ||
-				invoice.customer?.toLowerCase().includes(search);
+				invoice.customer?.toLowerCase().includes(search) ||
+				(Array.isArray(invoice.items) &&
+					invoice.items.some(
+						(item) =>
+							item.item_name?.toLowerCase().includes(search) ||
+							item.item_code?.toLowerCase().includes(search)
+					));
 			if (!matchesSearch) return false;
 		}
 

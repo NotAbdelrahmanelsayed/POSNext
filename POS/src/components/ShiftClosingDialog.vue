@@ -1265,7 +1265,9 @@ async function loadClosingData() {
 	} catch (error) {
 		console.error("Error loading closing data:", error);
 		errorMessage.value =
-			"Unable to load shift data. Please check your connection and try again.";
+			error?.messages?.[0] ||
+			error?.message ||
+			__("Unable to load shift data. Please check your connection and try again.");
 	}
 }
 

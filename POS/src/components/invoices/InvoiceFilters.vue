@@ -15,7 +15,7 @@
 					v-model="store.searchTerm"
 					type="text"
 					class="search-input"
-					:placeholder="__('Search invoices...')"
+					:placeholder="__('Search invoices, customers, or items...')"
 				/>
 				<button
 					v-if="store.searchTerm"

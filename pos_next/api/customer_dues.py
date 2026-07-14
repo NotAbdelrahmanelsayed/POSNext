@@ -27,6 +27,7 @@ _DUE_FIELDS = [
 	"name",
 	"posting_date",
 	"posting_time",
+	"due_date",
 	"customer",
 	"customer_name",
 	"grand_total",
@@ -308,11 +309,16 @@ def pay_customer_due(
 	pos_profile=None,
 	pos_opening_shift=None,
 	company=None,
+	invoice=None,
 ):
 	"""
-	FIFO lump-sum payment across a customer's outstanding invoices.
+	Lump-sum payment across a customer's outstanding invoices, FIFO by default.
 
 	payments: JSON list [{mode_of_payment, amount, account?}]
+	invoice: optional Sales Invoice name. When given, allocation is restricted to that
+		single invoice instead of walking every outstanding invoice — defense in depth
+		so this endpoint can never be reached with single-invoice intent and pay more
+		than the one invoice the caller meant.
 
 	Returns:
 		{
@@ -351,6 +357,8 @@ def pay_customer_due(
 	}
 	if company:
 		due_filters["company"] = company
+	if invoice:
+		due_filters["name"] = invoice
 
 	due_invoices = frappe.get_all(
 		"Sales Invoice",
@@ -360,6 +368,8 @@ def pay_customer_due(
 	)
 
 	if not due_invoices:
+		if invoice:
+			frappe.throw(_("Invoice {0} has no outstanding balance for customer {1}").format(invoice, customer))
 		frappe.throw(_("No outstanding invoices found for customer {0}").format(customer))
 
 	# Total payment vs total outstanding

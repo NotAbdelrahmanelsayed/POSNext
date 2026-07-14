@@ -10,10 +10,10 @@
 				<div class="w-full h-full max-w-[95vw] max-h-[95vh] bg-white rounded-lg shadow-2xl overflow-hidden flex flex-col">
 
 					<!-- Header -->
-					<div class="flex items-center justify-between px-6 py-4 border-b bg-gradient-to-r from-orange-50 to-amber-50 flex-shrink-0">
+					<div class="flex items-center justify-between px-6 py-4 border-b bg-white flex-shrink-0">
 						<div class="flex items-center gap-3">
-							<div class="p-2 bg-orange-100 rounded-lg">
-								<svg class="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<div class="p-2 bg-gray-100 rounded-lg">
+								<svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
 								</svg>
 							</div>
@@ -64,23 +64,32 @@
 							<!-- Total card -->
 							<div class="bg-orange-50 border-2 border-orange-300 rounded-xl p-5 text-center">
 								<div class="text-xs font-medium text-orange-600 mb-1">{{ __('Total Owed') }}</div>
-								<div class="text-3xl font-bold text-orange-700">{{ formatCurrency(summary.totals.net_balance) }}</div>
+								<div class="text-3xl font-bold text-orange-700 tabular-nums">{{ formatCurrency(summary.totals.net_balance) }}</div>
 								<div class="text-xs text-orange-500 mt-1">
 									{{ __('{0} customer(s) owe money', [summary.totals.customer_count]) }}
 								</div>
 							</div>
 
-							<!-- Search -->
-							<div v-if="summary.customers.length > 0" class="relative">
-								<svg class="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-								</svg>
-								<input
-									v-model="searchTerm"
-									type="text"
-									:placeholder="__('Search customers...')"
-									class="w-full ps-9 pe-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-orange-400"
-								/>
+							<!-- Search + sort -->
+							<div v-if="summary.customers.length > 0" class="flex flex-wrap items-center gap-2">
+								<div class="relative flex-1 min-w-[160px]">
+									<svg class="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+									</svg>
+									<input
+										v-model="searchTerm"
+										type="text"
+										:placeholder="__('Search customers...')"
+										class="w-full ps-9 pe-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-orange-400"
+									/>
+								</div>
+								<select
+									v-model="sortOrder"
+									class="text-xs font-medium border border-gray-300 rounded-lg px-2 py-2.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-400"
+								>
+									<option value="amount">{{ __('Sort: Amount') }}</option>
+									<option value="name">{{ __('Sort: Name') }}</option>
+								</select>
 							</div>
 
 							<!-- Empty state -->
@@ -91,7 +100,7 @@
 							</div>
 
 							<!-- No search results -->
-							<div v-else-if="filteredCustomers.length === 0" class="text-center py-8 text-gray-400 text-sm">
+							<div v-else-if="filteredCustomers.length === 0" class="text-center py-8 text-gray-500 text-sm">
 								{{ __('No customers match your search.') }}
 							</div>
 
@@ -113,7 +122,7 @@
 										<div class="text-sm font-bold text-gray-900 truncate">{{ row.customer_name }}</div>
 										<div class="text-xs text-gray-500 mt-0.5 flex items-center gap-2 flex-wrap">
 											<span>{{ __('{0} invoice(s)', [row.due_count]) }}</span>
-											<span v-if="row.total_credit > 0" class="text-blue-600 font-medium">
+											<span v-if="row.total_credit > 0" class="text-blue-600 font-medium tabular-nums">
 												{{ __('Credit: {0}', [formatCurrency(row.total_credit)]) }}
 											</span>
 										</div>
@@ -121,13 +130,13 @@
 									<div class="text-end flex-shrink-0">
 										<div
 											:class="[
-												'text-base font-bold',
+												'text-base font-bold tabular-nums',
 												row.net_balance > 0 ? 'text-orange-600' : 'text-blue-600',
 											]"
 										>
 											{{ formatCurrency(row.net_balance > 0 ? row.net_balance : row.total_outstanding) }}
 										</div>
-										<div v-if="row.net_balance <= 0" class="text-[10px] text-blue-500 mt-0.5">
+										<div v-if="row.net_balance <= 0" class="text-xs text-blue-600 mt-0.5">
 											{{ __('Has credit') }}
 										</div>
 									</div>
@@ -145,7 +154,7 @@
 						</div>
 
 						<!-- Error state -->
-						<div v-else class="flex flex-col items-center justify-center py-16 text-gray-400 gap-3">
+						<div v-else class="flex flex-col items-center justify-center py-16 text-gray-500 gap-3">
 							<svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
 							</svg>
@@ -198,14 +207,23 @@ const show = computed({
 const loading = ref(false)
 const summary = ref(null)
 const searchTerm = ref("")
+const sortOrder = ref("amount")
 
 const filteredCustomers = computed(() => {
 	if (!summary.value) return []
 	const term = normalizeSearchText(searchTerm.value).trim()
-	if (!term) return summary.value.customers
-	return summary.value.customers.filter((c) =>
-		normalizeSearchText(c.customer_name || c.customer).includes(term),
-	)
+	let list = term
+		? summary.value.customers.filter((c) =>
+				normalizeSearchText(c.customer_name || c.customer).includes(term),
+		  )
+		: summary.value.customers
+	list = [...list]
+	if (sortOrder.value === "name") {
+		list.sort((a, b) => (a.customer_name || a.customer).localeCompare(b.customer_name || b.customer))
+	} else {
+		list.sort((a, b) => Math.abs(b.net_balance) - Math.abs(a.net_balance))
+	}
+	return list
 })
 
 watch(

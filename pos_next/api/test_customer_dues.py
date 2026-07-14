@@ -59,9 +59,11 @@ class TestCreditCustomersSummary(unittest.TestCase):
 
 		result = customer_dues.get_credit_customers_summary(company="Sonex")
 
-		# CUST-C is fully offset by its return credit → excluded (net_balance == 0)
+		# CUST-C still has an unpaid invoice (total_outstanding=50) even though its
+		# return credit fully offsets it (net_balance == 0) — it stays in the list so
+		# the cashier can see "has credit", it's just excluded from the money totals.
 		names = [c["customer"] for c in result["customers"]]
-		self.assertEqual(names, ["CUST-A", "CUST-B"])  # sorted by net_balance desc
+		self.assertEqual(names, ["CUST-A", "CUST-B", "CUST-C"])  # sorted by net_balance desc, then outstanding
 
 		mixed = result["customers"][0]
 		self.assertEqual(mixed["total_outstanding"], 382)
@@ -69,8 +71,11 @@ class TestCreditCustomersSummary(unittest.TestCase):
 		self.assertEqual(mixed["net_balance"], 249)
 		self.assertEqual(mixed["due_count"], 14)
 
-		self.assertEqual(result["totals"]["customer_count"], 2)
-		self.assertEqual(result["totals"]["net_balance"], 399)  # 249 + 150
+		fully_credited = result["customers"][2]
+		self.assertEqual(fully_credited["net_balance"], 0)
+
+		self.assertEqual(result["totals"]["customer_count"], 3)
+		self.assertEqual(result["totals"]["net_balance"], 399)  # 249 + 150, CUST-C's 0 doesn't add
 		self.assertEqual(result["currency"], "EGP")
 
 	@patch("pos_next.api.customer_dues.frappe.throw", side_effect=RuntimeError("Not permitted"))
@@ -78,3 +83,49 @@ class TestCreditCustomersSummary(unittest.TestCase):
 	def test_summary_requires_read_permission(self, _perm, _throw):
 		with self.assertRaisesRegex(RuntimeError, "Not permitted"):
 			customer_dues.get_credit_customers_summary(company="Sonex")
+
+
+class TestPayCustomerDue(unittest.TestCase):
+	"""
+	Regression coverage for the pay-all bug: a single-invoice payment must never spill
+	onto a customer's other outstanding invoices. `invoice=` restricts allocation to
+	that one Sales Invoice — defense in depth behind the frontend keyboard-stack fix.
+	"""
+
+	@patch("pos_next.api.customer_dues.get_customer_balance", return_value={})
+	@patch("pos_next.api.customer_dues.create_payment_entry", return_value="PE-0001")
+	@patch("pos_next.api.customer_dues.frappe.get_all")
+	@patch("pos_next.api.customer_dues.frappe.db.savepoint")
+	@patch("pos_next.api.customer_dues.frappe.has_permission", return_value=True)
+	def test_invoice_param_restricts_allocation_to_one_invoice(
+		self, _perm, _savepoint, mock_get_all, mock_create_pe, _balance,
+	):
+		# Customer has three outstanding invoices; only INV-0002 should be touched.
+		mock_get_all.return_value = [{"name": "INV-0002", "outstanding_amount": 100}]
+
+		result = customer_dues.pay_customer_due(
+			customer="CUST-A",
+			payments=[{"mode_of_payment": "Cash", "amount": 100}],
+			invoice="INV-0002",
+		)
+
+		# The invoices query was filtered to the single named invoice.
+		due_filters = mock_get_all.call_args.kwargs["filters"]
+		self.assertEqual(due_filters["name"], "INV-0002")
+
+		# Only one Payment Entry, against the chosen invoice.
+		self.assertEqual(mock_create_pe.call_count, 1)
+		self.assertEqual(mock_create_pe.call_args.kwargs["invoice_name"], "INV-0002")
+		self.assertEqual(len(result["allocations"]), 1)
+		self.assertEqual(result["allocations"][0]["invoice"], "INV-0002")
+
+	@patch("pos_next.api.customer_dues.frappe.throw", side_effect=RuntimeError("no outstanding"))
+	@patch("pos_next.api.customer_dues.frappe.get_all", return_value=[])
+	@patch("pos_next.api.customer_dues.frappe.has_permission", return_value=True)
+	def test_invoice_param_with_no_balance_raises(self, _perm, _get_all, _throw):
+		with self.assertRaisesRegex(RuntimeError, "no outstanding"):
+			customer_dues.pay_customer_due(
+				customer="CUST-A",
+				payments=[{"mode_of_payment": "Cash", "amount": 100}],
+				invoice="INV-0002",
+			)
