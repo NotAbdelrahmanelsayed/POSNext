@@ -483,6 +483,48 @@ def create_payment_entry(
 		frappe.throw(_("Failed to create payment entry: {0}").format(str(e)))
 
 
+def create_loan_payment_entry(
+	journal_entry: str,
+	customer: str,
+	amount: float,
+	mode_of_payment: str = DEFAULT_PAYMENT_MODE,
+	payment_account: Optional[str] = None,
+	pos_opening_shift: Optional[str] = None,
+) -> str:
+	"""Sibling of ``create_payment_entry`` for a Cash Loan row in the FIFO walk
+	in ``customer_dues.pay_customer_due``.
+
+	A cash loan's "invoice" is a Journal Entry, and ``erpnext.get_payment_entry``
+	does not support Journal Entry as a source doctype -- so this resolves the
+	Cash Loan record behind the JE and delegates to
+	``easy_entry.api.cash_loan.repay_loan``, which is the single place that
+	builds the Payment Entry, keeps ``Cash Loan.status``/``outstanding_amount``
+	correct, and appends the ``repayments`` row. ``payment_account`` is accepted
+	only for call-site symmetry with ``create_payment_entry`` -- repay_loan
+	resolves its own account from ``mode_of_payment``.
+	"""
+	if "easy_entry" not in frappe.get_installed_apps():
+		frappe.throw(_("Cash loan repayment requires the easy_entry app to be installed."))
+
+	loan_name = frappe.db.get_value("Cash Loan", {"journal_entry_give": journal_entry}, "name")
+	if not loan_name:
+		frappe.throw(_("No Cash Loan found for Journal Entry {0}").format(journal_entry))
+
+	loan_borrower = frappe.db.get_value("Cash Loan", loan_name, "borrower")
+	if loan_borrower != customer:
+		frappe.throw(_("Cash Loan {0} does not belong to customer {1}").format(loan_name, customer))
+
+	from easy_entry.api.cash_loan import repay_loan
+
+	result = repay_loan(
+		name=loan_name,
+		mode_of_payment=mode_of_payment,
+		amount=amount,
+		pos_opening_shift=pos_opening_shift,
+	)
+	return result["payment_entry"]
+
+
 # ==========================================
 # Public API Methods
 # ==========================================

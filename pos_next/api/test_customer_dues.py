@@ -28,10 +28,11 @@ def _builder_with_result(result):
 
 
 class TestCreditCustomersSummary(unittest.TestCase):
+	@patch("pos_next.api.customer_dues._get_loan_outstanding_by_customer", return_value={})
 	@patch("pos_next.api.customer_dues.frappe.db.get_value", return_value="EGP")
 	@patch("pos_next.api.customer_dues.frappe.qb.from_")
 	@patch("pos_next.api.customer_dues.frappe.has_permission", return_value=True)
-	def test_summary_nets_returns_against_outstanding(self, _perm, mock_from, _gv):
+	def test_summary_nets_returns_against_outstanding(self, _perm, mock_from, _gv, _loans):
 		# Regular invoices (is_return=0): positive outstanding per customer
 		regular_rows = [
 			SimpleNamespace(
@@ -138,7 +139,14 @@ class TestPayCustomerDue(unittest.TestCase):
 		self, _perm, _savepoint, mock_get_all, mock_create_pe, _balance,
 	):
 		# Customer has three outstanding invoices; only INV-0002 should be touched.
-		mock_get_all.return_value = [{"name": "INV-0002", "outstanding_amount": 100}]
+		mock_get_all.return_value = [
+			{
+				"name": "INV-0002",
+				"posting_date": "2026-01-01",
+				"creation": "2026-01-01 10:00:00",
+				"outstanding_amount": 100,
+			}
+		]
 
 		result = customer_dues.pay_customer_due(
 			customer="CUST-A",

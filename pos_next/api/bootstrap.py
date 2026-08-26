@@ -110,6 +110,12 @@ def get_initial_data():
 		"ignore_pricing_rule": pos_profile.ignore_pricing_rule or 0,
 		"posa_allow_pos_expense": pos_profile.get("posa_allow_pos_expense") or 0,
 		"posa_maximum_expense_amount": pos_profile.get("posa_maximum_expense_amount") or 0,
+		# Cash loans delegate their ledger entries to easy_entry -- hide the POS
+		# button entirely (not just disable it) when that app isn't installed.
+		"posa_allow_cash_loan": bool(
+			pos_profile.get("posa_allow_cash_loan") and "easy_entry" in frappe.get_installed_apps()
+		),
+		"posa_maximum_loan_amount": pos_profile.get("posa_maximum_loan_amount") or 0,
 	}
 
 	result["pos_settings"] = _get_pos_settings(pos_profile)

@@ -51,7 +51,7 @@ def share_customer_statement(customer, pos_profile=None, company=None):
 		"Customer", customer, ["customer_name", "mobile_no"]
 	)
 
-	credit_items = _aggregate_credit_items(statement["due_invoices"])
+	credit_items = _aggregate_credit_items(statement["due_invoices"], statement.get("loans"))
 	currency = statement["currency"]
 
 	if not company and pos_profile:
@@ -59,7 +59,7 @@ def share_customer_statement(customer, pos_profile=None, company=None):
 	company_name = frappe.db.get_value("Company", company, "company_name") if company else (company or "")
 
 	total_amount = sum(flt(item["total_amount"]) for item in credit_items)
-	outstanding = flt(statement["summary"]["total_outstanding"])
+	outstanding = flt(statement["summary"].get("total_due", statement["summary"]["total_outstanding"]))
 	# Use the same return-aware breakdown as the customer dues dialog. The
 	# previous implementation inferred every reduction from outstanding as paid,
 	# which incorrectly classified linked merchandise returns.
@@ -130,10 +130,15 @@ def share_customer_statement(customer, pos_profile=None, company=None):
 	}
 
 
-def _aggregate_credit_items(due_invoices):
+def _aggregate_credit_items(due_invoices, loans=None):
 	"""Server-side port of the `creditItems` computed in CustomerDuesDialog.vue —
 	group due-invoice line items by item_code, summing qty and amount. A Partly
-	Paid invoice contributes its full line qty, matching the dialog's semantics."""
+	Paid invoice contributes its full line qty, matching the dialog's semantics.
+
+	Cash loans have no item lines -- they render as one pseudo-item row (blank
+	qty, amount = total outstanding loan balance) appended at the end, mirrored
+	in customer_statement.html / printCustomerStatement.js / whatsapp.js. Keep
+	all four in sync -- they silently drift if only one is edited."""
 	by_item = {}
 	for inv in due_invoices:
 		for item in inv.get("items", []):
@@ -152,7 +157,22 @@ def _aggregate_credit_items(due_invoices):
 					"total_qty": qty,
 					"total_amount": amount,
 				}
-	return list(by_item.values())
+	items = list(by_item.values())
+
+	loan_total = sum(flt(loan.get("outstanding")) for loan in (loans or []))
+	if loan_total > 0:
+		items.append(
+			{
+				"item_code": "__cash_loan__",
+				"item_name": _("Cash loan"),
+				"uom": None,
+				"total_qty": None,
+				"total_amount": loan_total,
+				"is_cash_loan": True,
+			}
+		)
+
+	return items
 
 
 def _render_png(html):

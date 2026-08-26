@@ -24,6 +24,9 @@
   "section_break_pos_expenses",
   "pos_expenses",
   "total_pos_expenses",
+  "section_break_cash_loans",
+  "pos_cash_loans",
+  "total_cash_loans",
   "section_break_if3m1",
   "payment_reconciliation_details",
   "section_break_11",
@@ -213,6 +216,25 @@
    "fieldname": "total_pos_expenses",
    "fieldtype": "Currency",
    "label": "Total POS Expenses",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_cash_loans",
+   "fieldtype": "Section Break",
+   "label": "Cash Loans"
+  },
+  {
+   "fieldname": "pos_cash_loans",
+   "fieldtype": "Table",
+   "label": "Cash Loans",
+   "options": "POS Closing Shift Loan",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "total_cash_loans",
+   "fieldtype": "Currency",
+   "label": "Total Cash Loans",
    "read_only": 1
   },
   {

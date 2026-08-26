@@ -28,7 +28,7 @@
 							<button
 								type="button"
 								@click="downloadStatementPdf"
-								:disabled="creditItems.length === 0"
+								:disabled="statementItems.length === 0"
 								class="p-2 text-gray-500 hover:bg-gray-100 active:bg-gray-200 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
 								:title="__('Download PDF')"
 							>
@@ -39,7 +39,7 @@
 							<button
 								type="button"
 								@click="shareViaWhatsApp"
-								:disabled="creditItems.length === 0 || !!sharingCustomer || isOffline()"
+								:disabled="statementItems.length === 0 || !!sharingCustomer || isOffline()"
 								class="p-2 text-gray-500 hover:bg-gray-100 active:bg-gray-200 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
 								:title="__('Send via WhatsApp')"
 							>
@@ -52,7 +52,7 @@
 							<button
 								type="button"
 								@click="downloadStatementImageToDevice"
-								:disabled="creditItems.length === 0 || !!downloadingCustomer || isOffline()"
+								:disabled="statementItems.length === 0 || !!downloadingCustomer || isOffline()"
 								class="p-2 text-gray-500 hover:bg-gray-100 active:bg-gray-200 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
 								:title="__('Download Image')"
 							>
@@ -64,7 +64,7 @@
 							<button
 								type="button"
 								@click="copyStatementImageToClipboard"
-								:disabled="creditItems.length === 0 || !!copyingCustomer || isOffline()"
+								:disabled="statementItems.length === 0 || !!copyingCustomer || isOffline()"
 								class="p-2 text-gray-500 hover:bg-gray-100 active:bg-gray-200 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
 								:title="__('Copy Image')"
 							>
@@ -146,7 +146,7 @@
 							<div v-if="activeTab === 'statement'" class="space-y-6">
 
 							<!-- Summary strip -->
-							<div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+							<div class="grid grid-cols-2 gap-4 lg:grid-cols-5">
 								<!-- Total (due invoices only) -->
 								<div class="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
 									<div class="text-xs font-medium text-gray-500 mb-1">{{ __('Total') }}</div>
@@ -167,21 +167,28 @@
 									<div class="text-xs font-medium text-blue-600 mb-1">{{ __('Returned') }}</div>
 									<div class="text-lg font-bold text-blue-700 tabular-nums">{{ formatCurrency(statement.summary.total_returned) }}</div>
 								</div>
-								<!-- Remaining (dominant) -->
+								<div
+									v-if="statement.summary.total_loans > 0.01"
+									class="bg-teal-50 border border-teal-200 rounded-xl p-4 text-center"
+								>
+									<div class="text-xs font-medium text-teal-600 mb-1">{{ __('Cash Loans') }}</div>
+									<div class="text-lg font-bold text-teal-700 tabular-nums">{{ formatCurrency(statement.summary.total_loans) }}</div>
+								</div>
+								<!-- Remaining (dominant) — invoices + cash loans -->
 								<div
 									class="rounded-xl p-4 text-center border-2"
-									:class="statement.summary.total_outstanding > 0
+									:class="statement.summary.total_due > 0
 										? 'bg-orange-50 border-orange-300'
 										: 'bg-green-50 border-green-300'"
 								>
-									<div class="text-xs font-medium mb-1" :class="statement.summary.total_outstanding > 0 ? 'text-orange-600' : 'text-green-600'">
+									<div class="text-xs font-medium mb-1" :class="statement.summary.total_due > 0 ? 'text-orange-600' : 'text-green-600'">
 										{{ __('Remaining') }}
 									</div>
-									<div class="text-2xl font-bold tabular-nums" :class="statement.summary.total_outstanding > 0 ? 'text-orange-700' : 'text-green-700'">
-										{{ formatCurrency(statement.summary.total_outstanding) }}
+									<div class="text-2xl font-bold tabular-nums" :class="statement.summary.total_due > 0 ? 'text-orange-700' : 'text-green-700'">
+										{{ formatCurrency(statement.summary.total_due) }}
 									</div>
-									<div class="text-xs mt-0.5" :class="statement.summary.total_outstanding > 0 ? 'text-orange-500' : 'text-green-500'">
-										{{ statement.summary.total_outstanding > 0 ? __('Still owed') : __('All settled') }}
+									<div class="text-xs mt-0.5" :class="statement.summary.total_due > 0 ? 'text-orange-500' : 'text-green-500'">
+										{{ statement.summary.total_due > 0 ? __('Still owed') : __('All settled') }}
 									</div>
 								</div>
 							</div>
@@ -189,7 +196,7 @@
 
 							<!-- Empty / all settled -->
 							<div
-								v-if="statement.summary.total_outstanding === 0 && statement.due_invoices.length === 0"
+								v-if="statement.summary.total_due === 0 && statement.due_invoices.length === 0"
 								class="text-center py-10"
 							>
 								<div class="text-5xl mb-3">✓</div>
@@ -198,6 +205,32 @@
 								<p v-if="statement.summary.total_credit > 0" class="text-sm text-green-600 mt-1 font-medium tabular-nums">
 									{{ __('Credit available: {0}', [formatCurrency(statement.summary.total_credit)]) }}
 								</p>
+							</div>
+
+							<!-- Cash Loans — rendered distinctly from invoices; not a Sales Invoice -->
+							<div
+								v-if="(statement.loans || []).length > 0"
+								class="bg-teal-50 border border-teal-200 rounded-xl overflow-hidden"
+							>
+								<div class="px-4 py-2.5 border-b border-teal-200 text-sm font-semibold text-teal-800">
+									{{ __('Cash Loans') }}
+								</div>
+								<div class="divide-y divide-teal-100">
+									<div
+										v-for="loan in statement.loans"
+										:key="loan.name"
+										class="flex items-center justify-between px-4 py-2.5 text-sm"
+									>
+										<div class="text-teal-900">
+											<span class="font-medium">{{ loan.name }}</span>
+											<span class="text-teal-600 text-xs ms-2">{{ loan.posting_date }}</span>
+											<span v-if="loan.remarks" class="text-teal-500 text-xs block">{{ loan.remarks }}</span>
+										</div>
+										<div class="font-semibold text-teal-800 tabular-nums">
+											{{ formatCurrency(loan.outstanding) }}
+										</div>
+									</div>
+								</div>
 							</div>
 
 							<!-- Filter chips + sort + expand/collapse -->
@@ -522,7 +555,7 @@
 
 					<!-- Sticky action footer -->
 					<div
-						v-if="statement && activeTab === 'statement' && statement.summary.total_outstanding > 0"
+						v-if="statement && activeTab === 'statement' && statement.summary.total_due > 0"
 						class="flex justify-end px-6 py-3 border-t bg-white flex-shrink-0"
 					>
 						<button
@@ -535,7 +568,7 @@
 							<svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
 							</svg>
-							{{ __('Pay Due ({0})', [formatCurrency(statement.summary.total_outstanding)]) }}
+							{{ __('Pay Due ({0})', [formatCurrency(statement.summary.total_due)]) }}
 						</button>
 					</div>
 				</div>
@@ -546,8 +579,8 @@
 	<!-- Lump-sum PaymentDialog -->
 	<PaymentDialog
 		v-model="showLumpSumPayment"
-		:grand-total="statement?.summary.total_outstanding || 0"
-		:subtotal="statement?.summary.total_outstanding || 0"
+		:grand-total="statement?.summary.total_due || 0"
+		:subtotal="statement?.summary.total_due || 0"
 		:customer="customerName || customer"
 		:pos-profile="posProfile"
 		:currency="currency"
@@ -825,6 +858,27 @@ const filteredSortedCreditItems = computed(() => {
 	return list
 })
 
+// Statement/print/share surfaces need a "Cash loan" pseudo-item appended (blank
+// qty, amount = total outstanding loan balance) -- server-side twin is
+// pos_next.api.customer_statement._aggregate_credit_items. Keep both in sync.
+// The "Items on Credit" tab (creditItems above) stays items-only on purpose --
+// a loan isn't merchandise, so it has no place in a restocking/tracking view.
+const statementItems = computed(() => {
+	const items = [...creditItems.value]
+	const loanTotal = Number.parseFloat(statement.value?.summary?.total_loans || 0)
+	if (loanTotal > 0.01) {
+		items.push({
+			item_code: "__cash_loan__",
+			item_name: __("Cash loan"),
+			uom: "",
+			total_qty: null,
+			total_amount: loanTotal,
+			is_cash_loan: true,
+		})
+	}
+	return items
+})
+
 const creditItemsTotalAmount = computed(() =>
 	creditItems.value.reduce((s, i) => s + i.total_amount, 0),
 )
@@ -1014,7 +1068,7 @@ function downloadStatementPdf() {
 			customerName: customerName.value || customerId.value,
 			currency: props.currency,
 			summary: statement.value.summary,
-			creditItems: creditItems.value,
+			creditItems: statementItems.value,
 		})
 	} catch (e) {
 		showError(e.message || __("Popup blocked — check your browser settings."))

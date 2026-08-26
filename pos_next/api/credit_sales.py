@@ -94,12 +94,20 @@ def get_customer_balance(customer, company=None):
 		# Credit only comes from return invoices where no cash refund was given
 		total_credit = flt(return_result[0].return_credit) if return_result else 0.0
 
+		# Cash loans (easy_entry) count toward what the customer owes, same as
+		# an unpaid invoice -- delegate to pos_next.api.cash_loans, which
+		# already returns the empty shape when easy_entry isn't installed.
+		from pos_next.api.cash_loans import get_customer_loans
+
+		loan_outstanding = flt(get_customer_loans(customer, company).get("total_outstanding"))
+
 		# Net balance: positive = owes, negative = has credit
-		net_balance = total_outstanding - total_credit
+		net_balance = total_outstanding + loan_outstanding - total_credit
 
 		return {
 			"total_outstanding": total_outstanding,
 			"total_credit": total_credit,
+			"loan_outstanding": loan_outstanding,
 			"net_balance": net_balance,
 		}
 

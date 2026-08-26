@@ -20,12 +20,15 @@ export function printCustomerStatement({
 		0,
 	)
 
+	// A cash loan pseudo-item (creditItems already has it appended by the
+	// caller as { is_cash_loan: true, total_qty: null }) has no quantity/uom --
+	// server-side twin: pos_next.api.customer_statement._aggregate_credit_items.
 	const itemRows = creditItems
 		.map(
 			(item) => `
 		<tr>
 			<td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;">${item.item_name || item.item_code}</td>
-			<td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;text-align:${textAlignEnd};white-space:nowrap;">${item.total_qty} ${item.uom || ""}</td>
+			<td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;text-align:${textAlignEnd};white-space:nowrap;">${item.is_cash_loan ? "" : `${item.total_qty} ${item.uom || ""}`}</td>
 			<td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;text-align:${textAlignEnd};font-weight:600;">${fmt(item.total_amount)}</td>
 		</tr>`,
 		)
@@ -33,6 +36,7 @@ export function printCustomerStatement({
 
 	const paid = Number.parseFloat(summary.total_paid || 0)
 	const returned = Number.parseFloat(summary.total_returned || 0)
+	const remaining = Number.parseFloat(summary.total_due ?? summary.total_outstanding ?? 0)
 
 	const summaryHtml = [
 		`<div class="summary-row"><span class="summary-label">${__("Total")}</span><span class="summary-value">${fmt(totalAmount)}</span></div>`,
@@ -46,7 +50,7 @@ export function printCustomerStatement({
 					`<div class="summary-row"><span class="summary-label">${__("Returned")}</span><span class="summary-value">${fmt(returned)}</span></div>`,
 				]
 			: []),
-		`<div class="summary-row net"><span class="summary-label">${__("Remaining")}</span><span class="summary-value">${fmt(summary.total_outstanding)}</span></div>`,
+		`<div class="summary-row net"><span class="summary-label">${__("Remaining")}</span><span class="summary-value">${fmt(remaining)}</span></div>`,
 	].join("\n    ")
 
 	const html = `<!DOCTYPE html>

@@ -148,6 +148,26 @@
 						<span>{{ __("POS Expense") }}</span>
 					</button>
 					<button
+						v-if="canGiveCashLoan"
+						@click="openCashLoanDialog"
+						class="w-full text-start px-4 py-2.5 text-sm text-gray-700 hover:bg-teal-50 flex items-center gap-3 transition-colors"
+					>
+						<svg
+							class="w-5 h-5 text-teal-600"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V6m0 2v8m0 0v2m0-2c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+							/>
+						</svg>
+						<span>{{ __("Cash Loan") }}</span>
+					</button>
+					<button
 						v-if="canAccessShiftActions"
 						@click="openReturnDialog"
 						class="w-full text-start px-4 py-2.5 text-sm text-gray-700 hover:bg-red-50 flex items-center gap-3 transition-colors"
@@ -419,6 +439,8 @@
 								@show-return="openReturnDialog"
 								@show-expense="openExpenseDialog"
 								:allow-pos-expense="canRecordPosExpense"
+								:allow-cash-loan="canGiveCashLoan"
+								@show-cash-loan="openCashLoanDialog"
 								@close-shift="handleCloseShift"
 							/>
 						</div>
@@ -576,6 +598,15 @@
 				:pos-opening-shift="shiftStore.currentShift?.name"
 				:currency="shiftStore.profileCurrency"
 				:maximum-expense-amount="shiftStore.maximumExpenseAmount"
+			/>
+
+			<!-- Cash Loan Dialog -->
+			<CashLoanDialog
+				v-model="uiStore.showCashLoanDialog"
+				:pos-profile="shiftStore.profileName"
+				:pos-opening-shift="shiftStore.currentShift?.name"
+				:currency="shiftStore.profileCurrency"
+				:maximum-loan-amount="shiftStore.maximumLoanAmount"
 			/>
 
 			<!-- Coupon Dialog -->
@@ -1077,6 +1108,7 @@ import PaymentDialog from "@/components/sale/PaymentDialog.vue";
 import PromotionManagement from "@/components/sale/PromotionManagement.vue";
 import ReturnInvoiceDialog from "@/components/sale/ReturnInvoiceDialog.vue";
 import ExpenseDialog from "@/components/sale/ExpenseDialog.vue";
+import CashLoanDialog from "@/components/sale/CashLoanDialog.vue";
 import WarehouseAvailabilityDialog from "@/components/sale/WarehouseAvailabilityDialog.vue";
 import POSSettings from "@/components/settings/POSSettings.vue";
 import CreditSalesSummaryDialog from "@/components/customers/CreditSalesSummaryDialog.vue";
@@ -1294,6 +1326,9 @@ const profileWarehouses = computed(() => {
 const canAccessShiftActions = computed(() => shiftStore.hasOpenShift);
 const canRecordPosExpense = computed(
 	() => canAccessShiftActions.value && shiftStore.allowPosExpense,
+);
+const canGiveCashLoan = computed(
+	() => canAccessShiftActions.value && shiftStore.allowCashLoan,
 );
 
 /** Desk link only for users with the Nexus POS Manager role (from bootstrap API). */
@@ -2574,6 +2609,14 @@ function openExpenseDialog() {
 	}
 
 	uiStore.showExpenseDialog = true;
+}
+
+function openCashLoanDialog() {
+	if (!canGiveCashLoan.value) {
+		return;
+	}
+
+	uiStore.showCashLoanDialog = true;
 }
 
 function switchToDesk() {
