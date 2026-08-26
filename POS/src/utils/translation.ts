@@ -188,14 +188,14 @@ async function loadLocale(locale: string, options: LoadOptions = {}) {
       applyMessages(cached.messages)
       appliedFromCache = true
 
-      if (!translationCache.isStale(cached.timestamp) && !forceNetwork) {
-        return true
-      }
     }
   }
 
   const entry = await translationCache.getFresh(target, () => requestTranslations(), {
-    force: forceNetwork,
+    // Startup is stale-while-revalidate: render a cached bundle immediately,
+    // then refresh it so newly deployed translations do not remain hidden for
+    // the cache TTL.
+    force: forceNetwork || preferCache,
   })
 
   if (entry?.messages) {

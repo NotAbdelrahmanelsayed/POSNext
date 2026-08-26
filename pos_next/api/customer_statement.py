@@ -37,6 +37,7 @@ def share_customer_statement(customer, pos_profile=None, company=None):
 		    customer_name: str,
 		    total_amount: float,  # total value of items on credit
 		    paid: float,
+		    returned: float,
 		    outstanding: float,
 		    currency: str,
 		}
@@ -59,7 +60,11 @@ def share_customer_statement(customer, pos_profile=None, company=None):
 
 	total_amount = sum(flt(item["total_amount"]) for item in credit_items)
 	outstanding = flt(statement["summary"]["total_outstanding"])
-	paid = max(0, total_amount - outstanding)
+	# Use the same return-aware breakdown as the customer dues dialog. The
+	# previous implementation inferred every reduction from outstanding as paid,
+	# which incorrectly classified linked merchandise returns.
+	paid = flt(statement["summary"].get("total_paid"))
+	returned = flt(statement["summary"].get("total_returned"))
 
 	def fmt(val):
 		# frappe.utils.fmt_money pulls its symbol from the Currency master, which on
@@ -86,7 +91,10 @@ def share_customer_statement(customer, pos_profile=None, company=None):
 			"items": credit_items,
 			"total_amount_formatted": fmt(total_amount),
 			"paid_formatted": fmt(paid),
+			"returned_formatted": fmt(returned),
 			"outstanding_formatted": fmt(outstanding),
+			"paid_amount": paid,
+			"returned_amount": returned,
 		},
 		is_path=True,
 	)
@@ -116,6 +124,7 @@ def share_customer_statement(customer, pos_profile=None, company=None):
 		"customer_name": customer_name or customer,
 		"total_amount": total_amount,
 		"paid": paid,
+		"returned": returned,
 		"outstanding": outstanding,
 		"currency": currency,
 	}

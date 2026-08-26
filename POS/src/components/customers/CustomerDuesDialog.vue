@@ -63,6 +63,19 @@
 							</button>
 							<button
 								type="button"
+								@click="copyStatementImageToClipboard"
+								:disabled="creditItems.length === 0 || !!copyingCustomer || isOffline()"
+								class="p-2 text-gray-500 hover:bg-gray-100 active:bg-gray-200 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+								:title="__('Copy Image')"
+							>
+								<LoadingIndicator v-if="copyingCustomer" class="w-5 h-5"/>
+								<svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 8h11a2 2 0 012 2v9a2 2 0 01-2 2h-9a2 2 0 01-2-2V8z"/>
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 8V5a2 2 0 00-2-2H5a2 2 0 00-2 2v9a2 2 0 002 2h3"/>
+								</svg>
+							</button>
+							<button
+								type="button"
 								@click="loadStatement"
 								:disabled="loading"
 								class="p-2 text-gray-500 hover:bg-gray-100 active:bg-gray-200 rounded-lg transition-colors"
@@ -133,12 +146,26 @@
 							<div v-if="activeTab === 'statement'" class="space-y-6">
 
 							<!-- Summary strip -->
-							<div class="grid grid-cols-2 gap-4">
-								<!-- Invoiced (due invoices only) -->
+							<div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+								<!-- Total (due invoices only) -->
 								<div class="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
-									<div class="text-xs font-medium text-gray-500 mb-1">{{ __('Invoiced') }}</div>
+									<div class="text-xs font-medium text-gray-500 mb-1">{{ __('Total') }}</div>
 									<div class="text-lg font-bold text-gray-700 tabular-nums">{{ formatCurrency(dueInvoicedTotal) }}</div>
 									<div class="text-xs text-gray-500 mt-0.5">{{ __('{0} unpaid invoice(s)', [statement.summary.due_count]) }}</div>
+								</div>
+								<div
+									v-if="statement.summary.total_paid > 0.01"
+									class="bg-green-50 border border-green-200 rounded-xl p-4 text-center"
+								>
+									<div class="text-xs font-medium text-green-600 mb-1">{{ __('Paid') }}</div>
+									<div class="text-lg font-bold text-green-700 tabular-nums">{{ formatCurrency(statement.summary.total_paid) }}</div>
+								</div>
+								<div
+									v-if="statement.summary.total_returned > 0.01"
+									class="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center"
+								>
+									<div class="text-xs font-medium text-blue-600 mb-1">{{ __('Returned') }}</div>
+									<div class="text-lg font-bold text-blue-700 tabular-nums">{{ formatCurrency(statement.summary.total_returned) }}</div>
 								</div>
 								<!-- Remaining (dominant) -->
 								<div
@@ -330,6 +357,19 @@
 													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
 												</svg>
 												{{ __('Pay') }}
+											</button>
+											<button
+												v-if="canCreateReturn(invoice)"
+												type="button"
+												@click.stop="openReturnModal(invoice)"
+												:disabled="isOffline()"
+												class="px-3 py-1.5 text-xs font-semibold bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+												:title="__('Create Return')"
+											>
+												<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
+												</svg>
+												{{ __('Return') }}
 											</button>
 											<button
 												type="button"
@@ -531,10 +571,21 @@
 		:title-suffix="selectedSingleInvoice?.name || ''"
 		@payment-completed="handleSinglePaymentCompleted"
 	/>
+
+	<!-- Return Invoice Dialog -->
+	<ReturnInvoiceDialog
+		v-model="showReturnDialog"
+		:pos-profile="posProfile"
+		:pos-opening-shift="currentShift?.name"
+		:currency="currency"
+		:preselected-invoice="selectedInvoiceForReturn"
+		@return-created="handleReturnCreated"
+	/>
 </template>
 
 <script setup>
 import PaymentDialog from "@/components/sale/PaymentDialog.vue"
+import ReturnInvoiceDialog from "@/components/sale/ReturnInvoiceDialog.vue"
 import { useDialogSubmit } from "@/composables/useDialogSubmit"
 import { useToast } from "@/composables/useToast"
 import { useShift } from "@/composables/useShift"
@@ -543,6 +594,7 @@ import {
 	formatCurrency as formatCurrencyUtil,
 } from "@/utils/currency"
 import { isOffline } from "@/utils/offline/offlineState"
+import { canCreateReturn } from "@/utils/invoice"
 import { printCustomerStatement } from "@/utils/printCustomerStatement"
 import { useWhatsAppStatement } from "@/composables/useWhatsAppStatement"
 import { call, LoadingIndicator } from "frappe-ui"
@@ -577,8 +629,10 @@ const { currentShift } = useShift()
 const {
 	sharingCustomer,
 	downloadingCustomer,
+	copyingCustomer,
 	shareStatement,
 	downloadStatement,
+	copyStatement,
 } = useWhatsAppStatement()
 
 const show = computed({
@@ -596,6 +650,8 @@ const activeTab = ref("statement")
 const showLumpSumPayment = ref(false)
 const showSinglePayment = ref(false)
 const selectedSingleInvoice = ref(null)
+const showReturnDialog = ref(false)
+const selectedInvoiceForReturn = ref(null)
 
 const customerName = computed(() => {
 	if (typeof props.customer === "object" && props.customer) {
@@ -807,6 +863,10 @@ watch(
 	},
 )
 
+watch(showReturnDialog, (isOpen) => {
+	if (!isOpen) selectedInvoiceForReturn.value = null
+})
+
 async function loadStatement() {
 	if (!customerId.value) return
 	loading.value = true
@@ -824,7 +884,9 @@ async function loadStatement() {
 		// customer with a long history doesn't produce an endless scroll.
 		expandedInvoices.value = new Set(
 			(result.due_invoices || [])
-				.filter((i) => Number.parseFloat(i.outstanding_amount) > 0 && !i.is_return)
+				.filter(
+					(i) => Number.parseFloat(i.outstanding_amount) > 0 && !i.is_return,
+				)
 				.map((i) => i.name),
 		)
 	} catch (error) {
@@ -862,6 +924,20 @@ function openSingleInvoicePayment(invoice) {
 	if (showLumpSumPayment.value) return
 	selectedSingleInvoice.value = invoice
 	showSinglePayment.value = true
+}
+
+function openReturnModal(invoice) {
+	if (isOffline() || !canCreateReturn(invoice)) return
+	selectedInvoiceForReturn.value = invoice
+	showReturnDialog.value = true
+}
+
+async function handleReturnCreated() {
+	// A return changes the source invoice status/outstanding amount and the
+	// quantities available for another return. Refresh the statement immediately.
+	statement.value = null
+	await loadStatement()
+	emit("payment-completed")
 }
 
 async function handleLumpSumCompleted(paymentData) {
@@ -919,6 +995,13 @@ function shareViaWhatsApp() {
 
 function downloadStatementImageToDevice() {
 	downloadStatement(customerId.value, {
+		company: props.company,
+		posProfile: props.posProfile,
+	})
+}
+
+function copyStatementImageToClipboard() {
+	copyStatement(customerId.value, {
 		company: props.company,
 		posProfile: props.posProfile,
 	})

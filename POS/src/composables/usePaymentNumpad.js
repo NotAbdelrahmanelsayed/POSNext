@@ -87,6 +87,11 @@ export function usePaymentNumpad(options = {}) {
 				activeElement.isContentEditable);
 		if (isInInput) return;
 
+		// Ignore modifier-combo keystrokes (e.g. Alt+3 to pick a payment method). Without this,
+		// the Alt+N shortcut's digit leaks into the amount buffer and later causes an overpayment
+		// that the customer-dues backend rejects with a ValidationError.
+		if (event.altKey || event.ctrlKey || event.metaKey) return;
+
 		const key = event.key;
 
 		// Handle numeric keys (0-9)

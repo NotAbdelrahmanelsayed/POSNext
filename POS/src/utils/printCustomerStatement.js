@@ -1,7 +1,13 @@
 import { formatCurrency } from "@/utils/currency"
 import { __ } from "@/utils/translation"
 
-export function printCustomerStatement({ companyName, customerName, currency, summary, creditItems }) {
+export function printCustomerStatement({
+	companyName,
+	customerName,
+	currency,
+	summary,
+	creditItems,
+}) {
 	const isRTL = document.documentElement.dir === "rtl"
 	const dir = isRTL ? "rtl" : "ltr"
 	const textAlign = isRTL ? "right" : "left"
@@ -9,7 +15,10 @@ export function printCustomerStatement({ companyName, customerName, currency, su
 
 	const fmt = (val) => formatCurrency(Number.parseFloat(val || 0), currency)
 
-	const totalAmount = creditItems.reduce((sum, item) => sum + Number.parseFloat(item.total_amount || 0), 0)
+	const totalAmount = creditItems.reduce(
+		(sum, item) => sum + Number.parseFloat(item.total_amount || 0),
+		0,
+	)
 
 	const itemRows = creditItems
 		.map(
@@ -22,11 +31,21 @@ export function printCustomerStatement({ companyName, customerName, currency, su
 		)
 		.join("")
 
-	const paid = Math.max(0, totalAmount - Number.parseFloat(summary.total_outstanding || 0))
+	const paid = Number.parseFloat(summary.total_paid || 0)
+	const returned = Number.parseFloat(summary.total_returned || 0)
 
 	const summaryHtml = [
 		`<div class="summary-row"><span class="summary-label">${__("Total")}</span><span class="summary-value">${fmt(totalAmount)}</span></div>`,
-		`<div class="summary-row"><span class="summary-label">${__("Paid")}</span><span class="summary-value">${fmt(paid)}</span></div>`,
+		...(paid > 0.01
+			? [
+					`<div class="summary-row"><span class="summary-label">${__("Paid")}</span><span class="summary-value">${fmt(paid)}</span></div>`,
+				]
+			: []),
+		...(returned > 0.01
+			? [
+					`<div class="summary-row"><span class="summary-label">${__("Returned")}</span><span class="summary-value">${fmt(returned)}</span></div>`,
+				]
+			: []),
 		`<div class="summary-row net"><span class="summary-label">${__("Remaining")}</span><span class="summary-value">${fmt(summary.total_outstanding)}</span></div>`,
 	].join("\n    ")
 

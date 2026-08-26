@@ -4,6 +4,7 @@ import { useToast } from "@/composables/useToast"
 import { __ } from "@/utils/translation"
 import {
 	buildStatementMessage,
+	copyStatementImage,
 	downloadStatementImage,
 	formatMessageAmount,
 	shareStatementImage,
@@ -26,6 +27,7 @@ export function useWhatsAppStatement() {
 	const { showSuccess, showError } = useToast()
 	const sharingCustomer = ref(null)
 	const downloadingCustomer = ref(null)
+	const copyingCustomer = ref(null)
 
 	async function fetchStatement(customerId, { company, posProfile }) {
 		return call("pos_next.api.customer_statement.share_customer_statement", {
@@ -59,6 +61,7 @@ export function useWhatsAppStatement() {
 			const message = buildStatementMessage({
 				totalAmount: fmt(result.total_amount),
 				paid: fmt(result.paid),
+				returned: fmt(result.returned),
 				outstanding: fmt(result.outstanding),
 			})
 
@@ -97,10 +100,33 @@ export function useWhatsAppStatement() {
 		}
 	}
 
+	async function copyStatement(customer, { company, posProfile } = {}) {
+		if (copyingCustomer.value) return
+
+		const customerId = resolveCustomerId(customer)
+		copyingCustomer.value = customerId
+
+		try {
+			const result = await fetchStatement(customerId, { company, posProfile })
+			const copied = await copyStatementImage(result.image_url)
+			if (!copied) {
+				showError(__("Failed to copy image"))
+				return
+			}
+			showSuccess(__("Image copied to clipboard"))
+		} catch (error) {
+			showError(error.message || __("Failed to copy image"))
+		} finally {
+			copyingCustomer.value = null
+		}
+	}
+
 	return {
 		sharingCustomer,
 		downloadingCustomer,
+		copyingCustomer,
 		shareStatement,
 		downloadStatement,
+		copyStatement,
 	}
 }
