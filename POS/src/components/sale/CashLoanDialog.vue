@@ -1,22 +1,6 @@
 <template>
 	<Dialog v-model="open" :options="{ title: __('Cash Loan'), size: 'md' }">
 		<template #body-content>
-			<div class="flex border-b border-gray-200 mb-4 -mt-1">
-				<button
-					v-for="tab in tabs"
-					:key="tab.id"
-					@click="activeTab = tab.id"
-					:class="[
-						'px-4 py-2 text-sm font-semibold border-b-2 transition-colors',
-						activeTab === tab.id
-							? 'text-blue-600 border-blue-600'
-							: 'text-gray-500 border-transparent hover:text-gray-700',
-					]"
-				>
-					{{ tab.label }}
-				</button>
-			</div>
-
 			<div v-if="dialogDataResource.loading" class="text-center py-8">
 				<div class="inline-block animate-spin rounded-full h-10 w-10 border-b-4 border-blue-600"></div>
 				<p class="mt-3 text-sm text-gray-600">{{ __("Loading cash loan data...") }}</p>
@@ -38,111 +22,59 @@
 					</div>
 				</div>
 
-				<template v-if="activeTab === 'give'">
-					<div>
-						<label class="block text-start text-sm font-medium text-gray-700 mb-2">
-							{{ __("Person's Name") }} <span class="text-red-500">*</span>
-						</label>
-						<Input
-							v-model="giveForm.party_name"
-							type="text"
-							:placeholder="__('Who is receiving the cash?')"
-						/>
-					</div>
+				<div>
+					<label class="block text-start text-sm font-medium text-gray-700 mb-2">
+						{{ __("Customer") }} <span class="text-red-500">*</span>
+					</label>
+					<AutocompleteSelect
+						v-model="form.customer"
+						:options="customerOptions"
+						:placeholder="__('Search customer')"
+						icon="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+						required
+					/>
+				</div>
 
-					<div>
-						<label class="block text-start text-sm font-medium text-gray-700 mb-2">
-							{{ __("Amount") }} <span class="text-red-500">*</span>
-						</label>
-						<Input
-							v-model="giveForm.amount"
-							type="number"
-							min="0"
-							step="0.01"
-							:placeholder="__('Enter amount')"
-						/>
-					</div>
+				<div>
+					<label class="block text-start text-sm font-medium text-gray-700 mb-2">
+						{{ __("Amount") }} <span class="text-red-500">*</span>
+					</label>
+					<Input
+						v-model="form.amount"
+						type="number"
+						min="0"
+						step="0.01"
+						:placeholder="__('Enter amount')"
+					/>
+					<p v-if="maximumLoanAmount > 0" class="mt-1 text-xs text-gray-500 text-start">
+						{{ shiftLoanLimitSummary }}
+					</p>
+				</div>
 
-					<div>
-						<label class="block text-start text-sm font-medium text-gray-700 mb-2">
-							{{ __("Mode of Payment") }} <span class="text-red-500">*</span>
-						</label>
-						<AutocompleteSelect
-							v-model="giveForm.mode_of_payment"
-							:options="paymentMethodOptions"
-							:placeholder="__('Search payment method...')"
-							icon="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"
-							required
-						/>
-					</div>
+				<div>
+					<label class="block text-start text-sm font-medium text-gray-700 mb-2">
+						{{ __("Mode of Payment") }} <span class="text-red-500">*</span>
+					</label>
+					<AutocompleteSelect
+						v-model="form.mode_of_payment"
+						:options="paymentMethodOptions"
+						:placeholder="__('Search payment method...')"
+						icon="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"
+						required
+					/>
+				</div>
 
-					<div>
-						<label class="block text-start text-sm font-medium text-gray-700 mb-2">
-							{{ __("Remarks") }}
-						</label>
-						<textarea
-							v-model="giveForm.remarks"
-							rows="3"
-							class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-start"
-							:placeholder="__('Optional remarks')"
-						></textarea>
-					</div>
-				</template>
-
-				<template v-else>
-					<div v-if="outstandingLoans.length === 0" class="text-center py-6 text-sm text-gray-500">
-						{{ __("No outstanding cash loans") }}
-					</div>
-
-					<div v-else class="flex flex-col gap-2">
-						<label class="block text-start text-sm font-medium text-gray-700">
-							{{ __("Select Loan to Repay") }} <span class="text-red-500">*</span>
-						</label>
-						<button
-							v-for="loan in outstandingLoans"
-							:key="loan.name"
-							type="button"
-							@click="repayForm.loan_journal_entry = loan.name"
-							:class="[
-								'w-full text-start rounded-lg border px-3 py-2 transition-colors',
-								repayForm.loan_journal_entry === loan.name
-									? 'border-blue-500 bg-blue-50'
-									: 'border-gray-200 hover:border-gray-300',
-							]"
-						>
-							<div class="flex justify-between items-center">
-								<span class="text-sm font-medium text-gray-800">{{ loan.party_name }}</span>
-								<span class="text-sm font-semibold text-gray-900">{{ formatCurrency(loan.amount) }}</span>
-							</div>
-							<div class="text-xs text-gray-500 mt-0.5">{{ loan.posting_date }}</div>
-						</button>
-					</div>
-
-					<div v-if="outstandingLoans.length > 0">
-						<label class="block text-start text-sm font-medium text-gray-700 mb-2">
-							{{ __("Mode of Payment") }} <span class="text-red-500">*</span>
-						</label>
-						<AutocompleteSelect
-							v-model="repayForm.mode_of_payment"
-							:options="paymentMethodOptions"
-							:placeholder="__('Search payment method...')"
-							icon="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"
-							required
-						/>
-					</div>
-
-					<div v-if="outstandingLoans.length > 0">
-						<label class="block text-start text-sm font-medium text-gray-700 mb-2">
-							{{ __("Remarks") }}
-						</label>
-						<textarea
-							v-model="repayForm.remarks"
-							rows="3"
-							class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-start"
-							:placeholder="__('Optional remarks')"
-						></textarea>
-					</div>
-				</template>
+				<div>
+					<label class="block text-start text-sm font-medium text-gray-700 mb-2">
+						{{ __("Remarks") }}
+					</label>
+					<textarea
+						v-model="form.remarks"
+						rows="3"
+						class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-start"
+						:placeholder="__('Optional remarks')"
+					></textarea>
+				</div>
 
 				<div
 					v-if="validationError"
@@ -155,30 +87,16 @@
 
 		<template #actions>
 			<div class="flex justify-end gap-2 w-full">
-				<Button
-					variant="subtle"
-					:disabled="submitResource.loading"
-					@click="open = false"
-				>
+				<Button variant="subtle" :disabled="submitResource.loading" @click="open = false">
 					{{ __("Cancel") }}
 				</Button>
 				<Button
-					v-if="activeTab === 'give'"
 					variant="solid"
 					:loading="submitResource.loading"
 					:disabled="dialogDataResource.loading || isOffline"
-					@click="submitGiveLoan"
+					@click="submitLoan"
 				>
 					{{ __("Give Loan") }}
-				</Button>
-				<Button
-					v-else
-					variant="solid"
-					:loading="submitResource.loading"
-					:disabled="dialogDataResource.loading || isOffline || outstandingLoans.length === 0"
-					@click="submitRepayLoan"
-				>
-					{{ __("Mark as Repaid") }}
 				</Button>
 			</div>
 		</template>
@@ -187,6 +105,7 @@
 
 <script setup>
 import AutocompleteSelect from "@/components/common/AutocompleteSelect.vue"
+import { useDialogSubmit } from "@/composables/useDialogSubmit"
 import { useFormatters } from "@/composables/useFormatters"
 import { useOfflineStatus } from "@/composables/useOfflineStatus"
 import { useToast } from "@/composables/useToast"
@@ -202,29 +121,21 @@ const props = defineProps({
 		type: String,
 		default: "USD",
 	},
+	maximumLoanAmount: {
+		type: Number,
+		default: 0,
+	},
 })
 
-const emit = defineEmits(["update:modelValue", "cash-loan-created", "cash-loan-repaid"])
+const emit = defineEmits(["update:modelValue", "cash-loan-created"])
 
 const { formatCurrency } = useFormatters()
 const { showSuccess } = useToast()
 const { isOffline } = useOfflineStatus()
 
-const tabs = [
-	{ id: "give", label: __("Give Loan") },
-	{ id: "repay", label: __("Repay Loan") },
-]
-const activeTab = ref("give")
-
-const giveForm = reactive({
-	party_name: "",
+const form = reactive({
+	customer: "",
 	amount: "",
-	mode_of_payment: "",
-	remarks: "",
-})
-
-const repayForm = reactive({
-	loan_journal_entry: "",
 	mode_of_payment: "",
 	remarks: "",
 })
@@ -236,8 +147,42 @@ const open = computed({
 	set: (value) => emit("update:modelValue", value),
 })
 
+const maximumLoanAmount = computed(
+	() =>
+		Number.parseFloat(props.maximumLoanAmount) ||
+		Number.parseFloat(dialogDataResource.data?.maximum_loan_amount) ||
+		0,
+)
+
+const shiftLoanTotal = computed(() => Number.parseFloat(dialogDataResource.data?.shift_loan_total) || 0)
+
+const remainingLoanAmount = computed(() => {
+	if (maximumLoanAmount.value <= 0) {
+		return 0
+	}
+
+	const remaining = Number.parseFloat(dialogDataResource.data?.remaining_loan_amount)
+	if (Number.isFinite(remaining)) {
+		return Math.max(0, remaining)
+	}
+
+	return Math.max(0, maximumLoanAmount.value - shiftLoanTotal.value)
+})
+
+const shiftLoanLimitSummary = computed(() => {
+	if (maximumLoanAmount.value <= 0) {
+		return ""
+	}
+
+	return [
+		__("Shift loan limit: {0}", { 0: formatCurrency(maximumLoanAmount.value) }),
+		__("Lent this shift: {0}", { 0: formatCurrency(shiftLoanTotal.value) }),
+		__("Remaining: {0}", { 0: formatCurrency(remainingLoanAmount.value) }),
+	].join(" | ")
+})
+
 const dialogDataResource = createResource({
-	url: "pos_next.api.cash_loans.get_cash_loan_dialog_data",
+	url: "pos_next.api.cash_loans.get_loan_dialog_data",
 	makeParams() {
 		return {
 			pos_profile: props.posProfile,
@@ -246,21 +191,28 @@ const dialogDataResource = createResource({
 	},
 	auto: false,
 	onError(error) {
-		validationError.value =
-			error?.messages?.[0] || error?.message || __("Unable to load cash loan data")
+		validationError.value = error?.messages?.[0] || error?.message || __("Unable to load cash loan data")
 	},
 })
 
-const giveResource = createResource({
-	url: "pos_next.api.cash_loans.create_cash_loan",
+const customersResource = createResource({
+	url: "pos_next.api.customers.get_customers",
+	makeParams() {
+		return { search_term: "", pos_profile: props.posProfile, limit: 500 }
+	},
+	auto: false,
+})
+
+const submitResource = createResource({
+	url: "pos_next.api.cash_loans.create_pos_cash_loan",
 	makeParams() {
 		return {
 			pos_opening_shift: props.posOpeningShift,
 			pos_profile: props.posProfile,
-			party_name: giveForm.party_name,
-			amount: Number.parseFloat(giveForm.amount),
-			mode_of_payment: giveForm.mode_of_payment,
-			remarks: giveForm.remarks || null,
+			customer: form.customer,
+			amount: Number.parseFloat(form.amount),
+			mode_of_payment: form.mode_of_payment,
+			remarks: form.remarks || null,
 		}
 	},
 	auto: false,
@@ -268,39 +220,13 @@ const giveResource = createResource({
 		showSuccess(data?.message || __("Cash loan recorded successfully"))
 		emit("cash-loan-created", data)
 		open.value = false
-		resetForms()
+		resetForm()
 	},
 	onError(error) {
 		const parsed = parseError(normalizeSubmitError(error))
 		validationError.value = parsed.message
 	},
 })
-
-const repayResource = createResource({
-	url: "pos_next.api.cash_loans.repay_cash_loan",
-	makeParams() {
-		return {
-			loan_journal_entry: repayForm.loan_journal_entry,
-			pos_opening_shift: props.posOpeningShift,
-			pos_profile: props.posProfile,
-			mode_of_payment: repayForm.mode_of_payment,
-			remarks: repayForm.remarks || null,
-		}
-	},
-	auto: false,
-	onSuccess(data) {
-		showSuccess(data?.message || __("Cash loan repayment recorded successfully"))
-		emit("cash-loan-repaid", data)
-		open.value = false
-		resetForms()
-	},
-	onError(error) {
-		const parsed = parseError(normalizeSubmitError(error))
-		validationError.value = parsed.message
-	},
-})
-
-const submitResource = computed(() => (activeTab.value === "give" ? giveResource : repayResource))
 
 function normalizeSubmitError(error) {
 	if (error instanceof Error) {
@@ -313,14 +239,20 @@ function normalizeSubmitError(error) {
 	return error || {}
 }
 
+const customerOptions = computed(() =>
+	(customersResource.data || []).map((customer) => ({
+		label: customer.customer_name || customer.name,
+		subtitle: customer.customer_name ? customer.name : "",
+		value: customer.name,
+	})),
+)
+
 const paymentMethodOptions = computed(() =>
 	(dialogDataResource.data?.payment_methods || []).map((method) => ({
 		label: method.mode_of_payment,
 		value: method.mode_of_payment,
 	})),
 )
-
-const outstandingLoans = computed(() => dialogDataResource.data?.outstanding_loans || [])
 
 watch(open, async (isOpen) => {
 	if (!isOpen) {
@@ -333,56 +265,42 @@ watch(open, async (isOpen) => {
 		return
 	}
 
-	activeTab.value = "give"
-	resetForms()
-	await dialogDataResource.submit()
+	resetForm()
+	await Promise.all([dialogDataResource.submit(), customersResource.submit()])
 })
 
-watch(activeTab, () => {
-	validationError.value = ""
-})
-
-function resetForms() {
-	giveForm.party_name = ""
-	giveForm.amount = ""
-	giveForm.mode_of_payment = ""
-	giveForm.remarks = ""
-	repayForm.loan_journal_entry = ""
-	repayForm.mode_of_payment = ""
-	repayForm.remarks = ""
+function resetForm() {
+	form.customer = ""
+	form.amount = ""
+	form.mode_of_payment = ""
+	form.remarks = ""
 	validationError.value = ""
 }
 
-function validateGiveForm() {
-	if (!giveForm.party_name?.trim()) {
-		return __("Person's name is required")
+function validateForm() {
+	if (!form.customer) {
+		return __("Customer is required")
 	}
 
-	const amount = Number.parseFloat(giveForm.amount)
+	const amount = Number.parseFloat(form.amount)
 	if (!Number.isFinite(amount) || amount <= 0) {
 		return __("Amount must be greater than zero")
 	}
 
-	if (!giveForm.mode_of_payment) {
+	if (maximumLoanAmount.value > 0 && amount > remainingLoanAmount.value) {
+		return __("Amount exceeds the remaining shift loan allowance of {0}", {
+			0: formatCurrency(remainingLoanAmount.value),
+		})
+	}
+
+	if (!form.mode_of_payment) {
 		return __("Mode of Payment is required")
 	}
 
 	return ""
 }
 
-function validateRepayForm() {
-	if (!repayForm.loan_journal_entry) {
-		return __("Please select a loan to repay")
-	}
-
-	if (!repayForm.mode_of_payment) {
-		return __("Mode of Payment is required")
-	}
-
-	return ""
-}
-
-async function submitGiveLoan() {
+async function submitLoan() {
 	if (isOffline.value) {
 		validationError.value = __(
 			"Cash loans cannot be recorded while offline. Please connect to the internet and try again.",
@@ -390,39 +308,30 @@ async function submitGiveLoan() {
 		return
 	}
 
-	validationError.value = validateGiveForm()
+	validationError.value = validateForm()
 	if (validationError.value) {
 		return
 	}
 
 	try {
-		await giveResource.submit()
+		await submitResource.submit()
 	} catch (error) {
 		const parsed = parseError(normalizeSubmitError(error))
 		validationError.value = parsed.message
 	}
 }
 
-async function submitRepayLoan() {
-	if (isOffline.value) {
-		validationError.value = __(
-			"Cash loans cannot be recorded while offline. Please connect to the internet and try again.",
-		)
-		return
-	}
-
-	validationError.value = validateRepayForm()
-	if (validationError.value) {
-		return
-	}
-
-	try {
-		await repayResource.submit()
-	} catch (error) {
-		const parsed = parseError(normalizeSubmitError(error))
-		validationError.value = parsed.message
-	}
-}
+// Handing out cash must never be triggerable by a keyboard shortcut (Enter /
+// Ctrl+S) -- same reasoning as CustomerDuesDialog's "Pay" action (bug-033).
+// Registering with both disabled also keeps this dialog from silently
+// forwarding a shortcut to whatever dialog is underneath it on the stack.
+useDialogSubmit({
+	isOpen: open,
+	onSubmit: () => {},
+	canSubmit: () => false,
+	enter: false,
+	ctrlS: false,
+})
 </script>
 
 <style scoped>

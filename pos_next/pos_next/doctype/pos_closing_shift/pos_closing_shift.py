@@ -638,11 +638,43 @@ def make_closing_shift_from_opening(opening_shift):
 	for pay in payments:
 		pay.expense_amount = expense_by_mode.get(pay.mode_of_payment, 0)
 
+	# Process Cash Loans given this shift — reduce expected cash per payment
+	# mode, same treatment as POS Expenses. Repayments need no separate
+	# handling here: get_payments_entries() above already picks up any Payment
+	# Entry whose reference_no equals this opening shift (that's how
+	# easy_entry.api.cash_loan.repay_loan tags a repayment made mid-shift).
+	from pos_next.api.cash_loans import get_shift_cash_loans
+
+	pos_cash_loans_table = []
+	loans_total = 0
+	loan_by_mode = defaultdict(float)
+
+	for loan in get_shift_cash_loans(opening_shift.get("name")):
+		loan_amount = flt(loan.amount)
+		loans_total += loan_amount
+		loan_by_mode[loan.mode_of_payment] += loan_amount
+		pos_cash_loans_table.append(
+			frappe._dict(
+				{
+					"customer": loan.customer_name or loan.customer,
+					"amount": loan_amount,
+					"mode_of_payment": loan.mode_of_payment,
+					"remarks": loan.remarks or "",
+				}
+			)
+		)
+		_aggregate_payment(payments, loan.mode_of_payment, -loan_amount)
+
+	for pay in payments:
+		pay.expense_amount = expense_by_mode.get(pay.mode_of_payment, 0)
+		pay.loan_amount = loan_by_mode.get(pay.mode_of_payment, 0)
+
 	# Update closing shift with totals
 	closing_shift.grand_total = summary["grand_total"]
 	closing_shift.net_total = summary["net_total"]
 	closing_shift.total_quantity = summary["total_quantity"]
 	closing_shift.total_pos_expenses = expenses_total
+	closing_shift.total_cash_loans = loans_total
 
 	# Set child tables (without return info - that's for display only)
 	closing_shift.set("pos_transactions", [
@@ -656,6 +688,7 @@ def make_closing_shift_from_opening(opening_shift):
 	closing_shift.set("taxes", taxes)
 	closing_shift.set("pos_payments", pos_payments_table)
 	closing_shift.set("pos_expenses", pos_expenses_table)
+	closing_shift.set("pos_cash_loans", pos_cash_loans_table)
 
 	# Build response with display-only fields
 	collections_total = sum(flt(py.get("paid_amount", 0)) for py in pos_payments_table)
@@ -669,6 +702,9 @@ def make_closing_shift_from_opening(opening_shift):
 			"expenses_total": expenses_total,
 			"expenses_count": len(pos_expenses_table),
 			"pos_expenses": pos_expenses_table,
+			"loans_total": loans_total,
+			"loans_count": len(pos_cash_loans_table),
+			"pos_cash_loans": pos_cash_loans_table,
 			"collections_total": collections_total,
 			"collections_count": len(pos_payments_table),
 			"pos_transactions": pos_transactions,  # Include return info for display

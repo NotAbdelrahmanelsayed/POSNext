@@ -18,6 +18,7 @@ from frappe.utils import flt
 from pos_next.api.credit_sales import get_customer_balance
 from pos_next.api.partial_payments import (
 	AMOUNT_TOLERANCE,
+	create_loan_payment_entry,
 	create_payment_entry,
 	enrich_invoice_with_payment_history,
 )
@@ -88,12 +89,21 @@ def get_customer_due_statement(customer, pos_profile=None, company=None, limit=1
 		company = frappe.db.get_value("POS Profile", pos_profile, "company")
 
 	# ── Summary ──────────────────────────────────────────────────────────────
+	# total_outstanding stays invoice-only on purpose: repointing it would
+	# silently change the pay_customer_due overpay guard and several UI
+	# computeds that were written against "invoices only". Cash loan debt is
+	# additive, in total_loans / total_due.
 	balance = get_customer_balance(customer, company)
+	from pos_next.api.cash_loans import get_customer_loans
+
+	loan_dues = get_customer_loans(customer, company)
 	summary = {
 		"total_outstanding": balance["total_outstanding"],
 		"total_credit": balance["total_credit"],
 		"net_balance": balance["net_balance"],
+		"total_loans": flt(loan_dues["total_outstanding"]),
 	}
+	summary["total_due"] = summary["total_outstanding"] + summary["total_loans"]
 
 	# ── Due invoices (oldest first = FIFO display order) ─────────────────────
 	due_filters = {
@@ -188,6 +198,7 @@ def get_customer_due_statement(customer, pos_profile=None, company=None, limit=1
 		"summary": summary,
 		"due_invoices": due_invoices,
 		"settled_invoices": settled_invoices,
+		"loans": loan_dues["loans"],
 		"currency": currency,
 	}
 
@@ -219,6 +230,29 @@ def _get_statement_breakdown(total, remaining, returned):
 	if returned < AMOUNT_TOLERANCE:
 		returned = 0.0
 	return flt(paid), flt(returned)
+
+
+def _get_loan_outstanding_by_customer(company=None):
+	"""{customer: live outstanding balance} for every open/partially-repaid Cash
+	Loan, company-wide. Empty dict when easy_entry isn't installed."""
+	if "easy_entry" not in frappe.get_installed_apps():
+		return {}
+
+	from easy_entry.api.cash_loan import get_loan_outstanding
+
+	filters = {"status": ["!=", "Repaid"]}
+	if company:
+		filters["company"] = company
+
+	loans = frappe.get_all("Cash Loan", filters=filters, fields=["name", "borrower"])
+
+	totals = {}
+	for loan in loans:
+		outstanding = flt(get_loan_outstanding(loan.name))
+		if outstanding <= 0:
+			continue
+		totals[loan.borrower] = totals.get(loan.borrower, 0.0) + outstanding
+	return totals
 
 
 @frappe.whitelist()
@@ -310,24 +344,48 @@ def get_credit_customers_summary(pos_profile=None, company=None):
 
 		credit_by_customer = {r.customer: flt(r.total_credit) for r in return_rows}
 
-		customers = []
+		# Cash loans (easy_entry) -- per-customer outstanding, merged in below.
+		# Returns {} when easy_entry is absent.
+		loan_by_customer = _get_loan_outstanding_by_customer(company)
+
+		customers_by_id = {}
 		for r in regular_rows:
 			total_outstanding = flt(r.total_outstanding)
-			if total_outstanding <= 0:
-				# No unpaid invoices at all — skip entirely
-				continue
 			total_credit = credit_by_customer.get(r.customer, 0.0)
-			net_balance = total_outstanding - total_credit
-			customers.append(
-				{
-					"customer": r.customer,
-					"customer_name": r.customer_name or r.customer,
-					"total_outstanding": total_outstanding,
-					"total_credit": total_credit,
-					"net_balance": net_balance,
-					"due_count": int(r.due_count or 0),
-				}
-			)
+			loan_outstanding = loan_by_customer.pop(r.customer, 0.0)
+			net_balance = total_outstanding + loan_outstanding - total_credit
+			if net_balance <= 0 and total_outstanding <= 0:
+				# No unpaid invoices and no outstanding loan -- skip entirely.
+				# (Deliberately not gated on total_outstanding alone: that would
+				# hide a customer who owes only a loan, with no invoices at all.)
+				continue
+			customers_by_id[r.customer] = {
+				"customer": r.customer,
+				"customer_name": r.customer_name or r.customer,
+				"total_outstanding": total_outstanding,
+				"total_credit": total_credit,
+				"total_loans": loan_outstanding,
+				"net_balance": net_balance,
+				"due_count": int(r.due_count or 0),
+			}
+
+		# Customers left in loan_by_customer have a loan but zero Sales Invoices
+		# at all -- regular_query's GROUP BY never produced a row for them.
+		for cust, loan_outstanding in loan_by_customer.items():
+			if loan_outstanding <= 0:
+				continue
+			customer_name = frappe.db.get_value("Customer", cust, "customer_name") or cust
+			customers_by_id[cust] = {
+				"customer": cust,
+				"customer_name": customer_name,
+				"total_outstanding": 0.0,
+				"total_credit": 0.0,
+				"total_loans": loan_outstanding,
+				"net_balance": loan_outstanding,
+				"due_count": 0,
+			}
+
+		customers = list(customers_by_id.values())
 
 		# Sort: customers who owe net (net_balance > 0) first, then by outstanding amount
 		customers.sort(key=lambda c: (-c["net_balance"], -c["total_outstanding"]))
@@ -355,6 +413,46 @@ def get_credit_customers_summary(pos_profile=None, company=None):
 		raise
 
 
+def _get_due_loan_docs(customer, company=None):
+	"""Open/partially-repaid Cash Loan JEs for a customer, in the same
+	{doctype, name, posting_date, creation, outstanding} shape as a Sales
+	Invoice row, for the unified FIFO walk in pay_customer_due. Empty list
+	when easy_entry isn't installed."""
+	if "easy_entry" not in frappe.get_installed_apps():
+		return []
+
+	from easy_entry.api.cash_loan import get_loan_outstanding
+
+	filters = {"borrower": customer, "status": ["!=", "Repaid"]}
+	if company:
+		filters["company"] = company
+
+	loans = frappe.get_all(
+		"Cash Loan",
+		filters=filters,
+		fields=["name", "journal_entry_give", "loan_date", "creation"],
+		order_by="loan_date asc, creation asc",
+	)
+
+	docs = []
+	for loan in loans:
+		if not loan.journal_entry_give:
+			continue
+		outstanding = flt(get_loan_outstanding(loan.name))
+		if outstanding <= AMOUNT_TOLERANCE:
+			continue
+		docs.append(
+			{
+				"doctype": "Journal Entry",
+				"name": loan.journal_entry_give,
+				"posting_date": loan.loan_date,
+				"creation": loan.creation,
+				"outstanding": outstanding,
+			}
+		)
+	return docs
+
+
 @frappe.whitelist()
 def pay_customer_due(
 	customer,
@@ -365,13 +463,14 @@ def pay_customer_due(
 	invoice=None,
 ):
 	"""
-	Lump-sum payment across a customer's outstanding invoices, FIFO by default.
+	Lump-sum payment across a customer's outstanding invoices (and, unless
+	scoped to one invoice, open cash loans), FIFO by default.
 
 	payments: JSON list [{mode_of_payment, amount, account?}]
 	invoice: optional Sales Invoice name. When given, allocation is restricted to that
-		single invoice instead of walking every outstanding invoice — defense in depth
-		so this endpoint can never be reached with single-invoice intent and pay more
-		than the one invoice the caller meant.
+		single invoice instead of walking every outstanding invoice or loan — defense
+		in depth so this endpoint can never be reached with single-invoice intent
+		(e.g. bug-033's "Pay" on one row) and touch anything else.
 
 	Returns:
 		{
@@ -416,18 +515,36 @@ def pay_customer_due(
 	due_invoices = frappe.get_all(
 		"Sales Invoice",
 		filters=due_filters,
-		fields=["name", "outstanding_amount"],
+		fields=["name", "posting_date", "creation", "outstanding_amount"],
 		order_by="posting_date asc, creation asc",
 	)
 
-	if not due_invoices:
+	# Unified FIFO list: Sales Invoices + open Cash Loan JEs, oldest first.
+	# invoice= scopes to that single Sales Invoice only -- loans never enter
+	# the walk in that case (bug-033: a single-row "Pay" must never touch
+	# anything but the row it was clicked on).
+	due_docs = [
+		{
+			"doctype": "Sales Invoice",
+			"name": inv["name"],
+			"posting_date": inv["posting_date"],
+			"creation": inv["creation"],
+			"outstanding": flt(inv["outstanding_amount"]),
+		}
+		for inv in due_invoices
+	]
+	if not invoice:
+		due_docs.extend(_get_due_loan_docs(customer, company))
+	due_docs.sort(key=lambda d: (d["posting_date"], d["creation"]))
+
+	if not due_docs:
 		if invoice:
 			frappe.throw(_("Invoice {0} has no outstanding balance for customer {1}").format(invoice, customer))
-		frappe.throw(_("No outstanding invoices found for customer {0}").format(customer))
+		frappe.throw(_("No outstanding invoices or loans found for customer {0}").format(customer))
 
-	# Total payment vs total outstanding
+	# Total payment vs total outstanding (invoices + loans)
 	total_payment = sum(flt(p.get("amount", 0)) for p in payments)
-	total_outstanding = sum(flt(inv["outstanding_amount"]) for inv in due_invoices)
+	total_outstanding = sum(d["outstanding"] for d in due_docs)
 
 	if total_payment > total_outstanding + AMOUNT_TOLERANCE:
 		frappe.throw(
@@ -442,9 +559,9 @@ def pay_customer_due(
 	allocations = []
 	payment_entries_created = 0
 
-	# Track remaining outstanding per invoice across payment modes
-	inv_remaining = {inv["name"]: flt(inv["outstanding_amount"]) for inv in due_invoices}
-	inv_order = [inv["name"] for inv in due_invoices]
+	# Track remaining outstanding per document across payment modes
+	doc_remaining = {d["name"]: d["outstanding"] for d in due_docs}
+	doc_order = [(d["doctype"], d["name"]) for d in due_docs]
 
 	try:
 		frappe.db.savepoint(savepoint)
@@ -457,26 +574,36 @@ def pay_customer_due(
 			if remaining_mode <= 0:
 				continue
 
-			for inv_name in inv_order:
+			for doctype, doc_name in doc_order:
 				if remaining_mode <= AMOUNT_TOLERANCE:
 					break
-				inv_due = inv_remaining.get(inv_name, 0)
-				if inv_due <= AMOUNT_TOLERANCE:
+				doc_due = doc_remaining.get(doc_name, 0)
+				if doc_due <= AMOUNT_TOLERANCE:
 					continue
 
-				alloc_amount = min(remaining_mode, inv_due)
-				pe_name = create_payment_entry(
-					invoice_name=inv_name,
-					amount=alloc_amount,
-					mode_of_payment=mode,
-					payment_account=account,
-					pos_opening_shift=pos_opening_shift,
-				)
+				alloc_amount = min(remaining_mode, doc_due)
+				if doctype == "Sales Invoice":
+					create_payment_entry(
+						invoice_name=doc_name,
+						amount=alloc_amount,
+						mode_of_payment=mode,
+						payment_account=account,
+						pos_opening_shift=pos_opening_shift,
+					)
+				else:
+					create_loan_payment_entry(
+						journal_entry=doc_name,
+						customer=customer,
+						amount=alloc_amount,
+						mode_of_payment=mode,
+						payment_account=account,
+						pos_opening_shift=pos_opening_shift,
+					)
 				allocations.append(
-					{"invoice": inv_name, "mode_of_payment": mode, "amount": alloc_amount}
+					{"invoice": doc_name, "mode_of_payment": mode, "amount": alloc_amount}
 				)
 				payment_entries_created += 1
-				inv_remaining[inv_name] = inv_due - alloc_amount
+				doc_remaining[doc_name] = doc_due - alloc_amount
 				remaining_mode -= alloc_amount
 
 	except Exception:

@@ -120,6 +120,24 @@
 								</div>
 							</div>
 
+							<!-- Cash Loans -->
+							<div
+								v-if="hasLoans"
+								class="text-start bg-teal-50 border border-teal-200 rounded-lg p-3 md:p-4"
+							>
+								<div class="text-teal-700 text-xs uppercase font-medium mb-1">
+									{{ __("Cash Loans") }}
+								</div>
+								<div
+									class="text-lg md:text-2xl font-bold text-teal-900 mb-0.5 md:mb-1 truncate"
+								>
+									-{{ formatCurrency(closingData.loans_total) }}
+								</div>
+								<div class="text-teal-700 text-xs">
+									{{ __("{0} loans", [closingData.loans_count]) }}
+								</div>
+							</div>
+
 							<!-- Net Sales (after returns) -->
 							<div
 								class="text-start bg-green-50 border border-green-200 rounded-lg p-3 md:p-4"
@@ -137,7 +155,7 @@
 
 							<!-- Net Cash Impact -->
 							<div
-								v-if="hasExpenses"
+								v-if="hasExpenses || hasLoans"
 								class="text-start bg-purple-50 border border-purple-200 rounded-lg p-3 md:p-4"
 							>
 								<div class="text-purple-700 text-xs uppercase font-medium mb-1">
@@ -149,7 +167,7 @@
 									{{ formatCurrency(netCashImpact) }}
 								</div>
 								<div class="text-purple-700 text-xs">
-									{{ __("Sales - Returns - Expenses") }}
+									{{ __("Sales - Returns - Expenses - Loans") }}
 								</div>
 							</div>
 
@@ -431,6 +449,72 @@
 										</td>
 										<td class="px-4 py-3 text-sm text-gray-600 text-start">
 											{{ expense.remarks || __("N/A") }}
+										</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+					</div>
+
+					<!-- Cash Loans Summary -->
+					<div
+						v-if="hasLoans"
+						class="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm"
+					>
+						<div class="px-3 py-3 md:px-6 md:py-4 border-b border-gray-200 bg-teal-50">
+							<h3 class="text-sm md:text-lg font-semibold text-gray-900 text-start">
+								{{ __("Cash Loans") }}
+							</h3>
+							<p class="text-xs md:text-sm text-gray-600 text-start">
+								{{
+									__("{0} loans totaling {1}", [
+										closingData.loans_count,
+										formatCurrency(closingData.loans_total),
+									])
+								}}
+							</p>
+						</div>
+						<div class="overflow-x-auto">
+							<table class="min-w-full divide-y divide-gray-200">
+								<thead class="bg-gray-50">
+									<tr>
+										<th
+											class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase"
+										>
+											{{ __("Customer") }}
+										</th>
+										<th
+											class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase"
+										>
+											{{ __("Amount") }}
+										</th>
+										<th
+											class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase"
+										>
+											{{ __("Mode of Payment") }}
+										</th>
+										<th
+											class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase"
+										>
+											{{ __("Remarks") }}
+										</th>
+									</tr>
+								</thead>
+								<tbody class="divide-y divide-gray-200">
+									<tr v-for="(loan, idx) in closingData.pos_cash_loans" :key="idx">
+										<td class="px-4 py-3 text-sm text-gray-900 text-start">
+											{{ loan.customer }}
+										</td>
+										<td
+											class="px-4 py-3 text-sm font-semibold text-teal-800 text-start"
+										>
+											{{ formatCurrency(loan.amount) }}
+										</td>
+										<td class="px-4 py-3 text-sm text-gray-600 text-start">
+											{{ loan.mode_of_payment }}
+										</td>
+										<td class="px-4 py-3 text-sm text-gray-600 text-start">
+											{{ loan.remarks || __("N/A") }}
 										</td>
 									</tr>
 								</tbody>
@@ -723,6 +807,16 @@
 													{{
 														__("Expenses: -{0}", [
 															formatCurrency(payment.expense_amount),
+														])
+													}}
+												</p>
+												<p
+													v-if="payment.loan_amount > 0"
+													class="text-xs md:text-sm text-teal-700 text-start"
+												>
+													{{
+														__("Loans: -{0}", [
+															formatCurrency(payment.loan_amount),
 														])
 													}}
 												</p>
@@ -1410,12 +1504,18 @@ const hasExpenses = computed(() => {
 	return (closingData.value.expenses_count || 0) > 0
 })
 
+const hasLoans = computed(() => {
+	if (!closingData.value) return false
+	return (closingData.value.loans_count || 0) > 0
+})
+
 const netCashImpact = computed(() => {
 	if (!closingData.value) return 0
 	const sales = Number.parseFloat(closingData.value.sales_total || closingData.value.grand_total || 0)
 	const returns = Number.parseFloat(closingData.value.returns_total || 0)
 	const expenses = Number.parseFloat(closingData.value.expenses_total || 0)
-	return sales - returns - expenses
+	const loans = Number.parseFloat(closingData.value.loans_total || 0)
+	return sales - returns - expenses - loans
 })
 
 // Check if there are any payment entries (credit collections)

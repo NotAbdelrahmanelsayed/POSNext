@@ -148,7 +148,7 @@
 						<span>{{ __("POS Expense") }}</span>
 					</button>
 					<button
-						v-if="canAccessShiftActions"
+						v-if="canGiveCashLoan"
 						@click="openCashLoanDialog"
 						class="w-full text-start px-4 py-2.5 text-sm text-gray-700 hover:bg-teal-50 flex items-center gap-3 transition-colors"
 					>
@@ -439,6 +439,7 @@
 								@show-return="openReturnDialog"
 								@show-expense="openExpenseDialog"
 								:allow-pos-expense="canRecordPosExpense"
+								:allow-cash-loan="canGiveCashLoan"
 								@show-cash-loan="openCashLoanDialog"
 								@close-shift="handleCloseShift"
 							/>
@@ -605,6 +606,7 @@
 				:pos-profile="shiftStore.profileName"
 				:pos-opening-shift="shiftStore.currentShift?.name"
 				:currency="shiftStore.profileCurrency"
+				:maximum-loan-amount="shiftStore.maximumLoanAmount"
 			/>
 
 			<!-- Coupon Dialog -->
@@ -1324,6 +1326,9 @@ const profileWarehouses = computed(() => {
 const canAccessShiftActions = computed(() => shiftStore.hasOpenShift);
 const canRecordPosExpense = computed(
 	() => canAccessShiftActions.value && shiftStore.allowPosExpense,
+);
+const canGiveCashLoan = computed(
+	() => canAccessShiftActions.value && shiftStore.allowCashLoan,
 );
 
 /** Desk link only for users with the Nexus POS Manager role (from bootstrap API). */
@@ -2607,7 +2612,7 @@ function openExpenseDialog() {
 }
 
 function openCashLoanDialog() {
-	if (!canAccessShiftActions.value) {
+	if (!canGiveCashLoan.value) {
 		return;
 	}
 

@@ -4,347 +4,214 @@
 """
 POS Cash Loan API
 
-Records interest-free cash handed to a customer/person as a real receivable
-(Journal Entry: Dr "Cash Loans Receivable", Cr the payment account) instead of
-selling it as a POS Item, so it never inflates Gross Profit. Repayment reverses
-the entry (Dr payment account, Cr "Cash Loans Receivable") and closes the loan.
+Thin POS-side wrapper around easy_entry's Cash Loan ledger. pos_next never
+builds its own accounting for this -- it validates shift/profile rules
+(mirrors pos_next/api/expenses.py) and delegates the actual Journal Entry /
+Payment Entry work to easy_entry.api.cash_loan.give_loan / get_customer_loan_dues.
+
+Degrades gracefully when easy_entry is not installed: every function here
+returns the "no cash loans" shape instead of raising. bootstrap.py already
+forces posa_allow_cash_loan to False client-side when easy_entry is absent,
+so the POS button stays hidden, not just disabled.
 """
 
 import frappe
 from frappe import _
-from frappe.utils import cstr, flt, today
+from frappe.utils import cstr, flt
 
-from pos_next.api.expenses import (
-	_ensure_account_name,
-	_resolve_payment_account,
-	validate_mode_of_payment,
-	validate_open_shift,
-)
+from pos_next.api.expenses import validate_mode_of_payment, validate_open_shift
 
-CASH_LOAN_ACCOUNT_NAME = "Cash Loans Receivable"
+
+def _easy_entry_installed():
+	return "easy_entry" in frappe.get_installed_apps()
+
+
+def _require_easy_entry():
+	if not _easy_entry_installed():
+		frappe.throw(_("Cash loans require the easy_entry app to be installed."))
 
 
 @frappe.whitelist()
-def get_cash_loan_dialog_data(pos_profile, pos_opening_shift):
-	"""Return payment methods and open loans for the cash loan dialog."""
+def get_loan_dialog_data(pos_profile, pos_opening_shift):
+	"""Return payment methods and shift loan totals for the cash loan dialog."""
+	if not _easy_entry_installed():
+		return {
+			"payment_methods": [],
+			"maximum_loan_amount": 0,
+			"shift_loan_total": 0,
+			"remaining_loan_amount": 0,
+			"currency": frappe.defaults.get_global_default("currency") or "EGP",
+		}
+
+	validate_cash_loan_enabled(pos_profile)
 	shift = validate_open_shift(pos_opening_shift, pos_profile)
 
 	from pos_next.api.pos_profile import get_payment_methods
 
+	maximum_loan_amount = flt(frappe.db.get_value("POS Profile", pos_profile, "posa_maximum_loan_amount"))
+	shift_loan_total = get_shift_loan_total(pos_opening_shift)
+	remaining_loan_amount = _get_remaining_shift_loan_amount(maximum_loan_amount, shift_loan_total)
+
 	return {
 		"payment_methods": get_payment_methods(pos_profile),
-		"outstanding_loans": get_outstanding_cash_loans(shift.company),
+		"maximum_loan_amount": maximum_loan_amount,
+		"shift_loan_total": shift_loan_total,
+		"remaining_loan_amount": remaining_loan_amount,
+		"currency": frappe.get_cached_value("Company", shift.company, "default_currency"),
 	}
 
 
 @frappe.whitelist()
-def create_cash_loan(
-	pos_opening_shift,
-	pos_profile,
-	party_name,
-	amount,
-	mode_of_payment,
-	remarks=None,
-):
-	"""Give cash to a person as a loan: Dr Cash Loans Receivable, Cr payment account."""
+def create_pos_cash_loan(pos_opening_shift, pos_profile, customer, amount, mode_of_payment, remarks=None):
+	"""Give cash to a customer as a loan; the ledger entry is easy_entry's job."""
+	_require_easy_entry()
+
 	amount = flt(amount)
-	party_name = cstr(party_name).strip()
+	customer = cstr(customer).strip()
 	remarks = (remarks or "").strip()
 
+	validate_cash_loan_enabled(pos_profile)
 	shift = validate_open_shift(pos_opening_shift, pos_profile)
-	validate_cash_loan_party(party_name)
-	validate_cash_loan_amount(amount)
+	validate_cash_loan_amount(amount, pos_profile, pos_opening_shift)
 	validate_mode_of_payment(mode_of_payment, pos_profile, shift.company)
 
-	cost_center = frappe.db.get_value("POS Profile", pos_profile, "cost_center")
-	payment_account = _ensure_account_name(
-		_resolve_payment_account(mode_of_payment, shift.company),
-		_("Payment Account"),
-	)
-	loan_account = get_or_create_cash_loan_account(shift.company)
+	if not customer:
+		frappe.throw(_("Customer is required"))
+	if not frappe.db.exists("Customer", customer):
+		frappe.throw(_("Customer {0} does not exist").format(customer))
 
-	journal_entry_name = _create_cash_loan_journal_entry(
-		company=shift.company,
-		loan_account=loan_account,
-		payment_account=payment_account,
+	from easy_entry.api.cash_loan import give_loan
+
+	result = give_loan(
+		borrower=customer,
 		amount=amount,
-		cost_center=cost_center,
-		pos_opening_shift=pos_opening_shift,
-		pos_profile=pos_profile,
 		mode_of_payment=mode_of_payment,
-		party_name=party_name,
-		remarks=remarks,
-		status="Open",
-		repayment_of=None,
-	)
-
-	return {
-		"name": journal_entry_name,
-		"journal_entry": journal_entry_name,
-		"amount": amount,
-		"message": _("Cash loan of {0} recorded for {1} in Journal Entry {2}").format(
-			frappe.format_value(amount, {"fieldtype": "Currency"}),
-			party_name,
-			journal_entry_name,
-		),
-	}
-
-
-@frappe.whitelist()
-def repay_cash_loan(
-	loan_journal_entry,
-	pos_opening_shift,
-	pos_profile,
-	mode_of_payment,
-	remarks=None,
-):
-	"""Receive a loan back in full: Dr payment account, Cr Cash Loans Receivable."""
-	remarks = (remarks or "").strip()
-
-	shift = validate_open_shift(pos_opening_shift, pos_profile)
-	loan = validate_open_cash_loan(loan_journal_entry, shift.company)
-	validate_mode_of_payment(mode_of_payment, pos_profile, shift.company)
-
-	cost_center = frappe.db.get_value("POS Profile", pos_profile, "cost_center")
-	payment_account = _ensure_account_name(
-		_resolve_payment_account(mode_of_payment, shift.company),
-		_("Payment Account"),
-	)
-	loan_account = get_or_create_cash_loan_account(shift.company)
-
-	journal_entry_name = _create_cash_loan_journal_entry(
 		company=shift.company,
-		loan_account=loan_account,
-		payment_account=payment_account,
-		amount=loan.posa_cash_loan_amount,
-		cost_center=cost_center,
+		remarks=remarks or None,
 		pos_opening_shift=pos_opening_shift,
 		pos_profile=pos_profile,
-		mode_of_payment=mode_of_payment,
-		party_name=loan.posa_cash_loan_party_name,
-		remarks=remarks,
-		status="Repaid",
-		repayment_of=loan.name,
-		reverse=True,
 	)
 
-	frappe.db.set_value("Journal Entry", loan.name, "posa_cash_loan_status", "Repaid")
-
 	return {
-		"name": journal_entry_name,
-		"journal_entry": journal_entry_name,
-		"amount": loan.posa_cash_loan_amount,
-		"message": _("Cash loan repayment of {0} from {1} recorded in Journal Entry {2}").format(
-			frappe.format_value(loan.posa_cash_loan_amount, {"fieldtype": "Currency"}),
-			loan.posa_cash_loan_party_name,
-			journal_entry_name,
-		),
+		"name": result["name"],
+		"journal_entry": result["journal_entry"],
+		"amount": amount,
+		"message": _("Cash loan recorded in Journal Entry {0}").format(result["journal_entry"]),
 	}
 
 
-def validate_cash_loan_party(party_name):
-	if not party_name:
-		frappe.throw(_("Party name is required"))
+def validate_cash_loan_enabled(pos_profile):
+	if not pos_profile:
+		frappe.throw(_("POS Profile is required"))
+
+	if not frappe.db.get_value("POS Profile", pos_profile, "posa_allow_cash_loan"):
+		frappe.throw(
+			_("Cash Loan is not enabled for POS Profile {0}").format(frappe.bold(pos_profile)),
+			title=_("Cash Loan Disabled"),
+		)
 
 
-def validate_cash_loan_amount(amount):
+def validate_cash_loan_amount(amount, pos_profile, pos_opening_shift=None):
 	if flt(amount) <= 0:
 		frappe.throw(_("Amount must be greater than zero"))
 
+	maximum_amount = flt(frappe.db.get_value("POS Profile", pos_profile, "posa_maximum_loan_amount"))
+	if maximum_amount <= 0:
+		return
 
-def validate_open_cash_loan(loan_journal_entry, company):
-	if not loan_journal_entry:
-		frappe.throw(_("Loan is required"))
-
-	loan = frappe.db.get_value(
-		"Journal Entry",
-		loan_journal_entry,
-		[
-			"name",
-			"company",
-			"docstatus",
-			"posa_is_cash_loan",
-			"posa_cash_loan_status",
-			"posa_cash_loan_party_name",
-			"posa_cash_loan_amount",
-		],
-		as_dict=True,
-	)
-
-	if not loan or not loan.posa_is_cash_loan or loan.docstatus != 1:
-		frappe.throw(_("Cash loan {0} does not exist").format(loan_journal_entry))
-
-	if loan.company != company:
-		frappe.throw(_("Cash loan {0} does not belong to company {1}").format(loan_journal_entry, company))
-
-	if loan.posa_cash_loan_status != "Open":
-		frappe.throw(_("Cash loan {0} has already been repaid").format(loan_journal_entry))
-
-	return loan
-
-
-def get_or_create_cash_loan_account(company):
-	"""Return the company's 'Cash Loans Receivable' asset account, creating it if missing."""
-	account_name = frappe.db.get_value(
-		"Account",
-		{"company": company, "account_name": CASH_LOAN_ACCOUNT_NAME},
-		"name",
-	)
-	if account_name:
-		return account_name
-
-	parent_account = frappe.db.get_value(
-		"Account",
-		{
-			"company": company,
-			"account_name": ["like", "Current Assets%"],
-			"is_group": 1,
-			"root_type": "Asset",
-		},
-		"name",
-	)
-	if not parent_account:
+	shift_total = get_shift_loan_total(pos_opening_shift) if pos_opening_shift else 0
+	new_shift_total = shift_total + flt(amount)
+	if new_shift_total > maximum_amount:
+		remaining = _get_remaining_shift_loan_amount(maximum_amount, shift_total)
 		frappe.throw(
-			_("Could not find a 'Current Assets' parent account for company {0} to create {1} under").format(
-				company, CASH_LOAN_ACCOUNT_NAME
-			)
+			_(
+				"This loan would exceed the shift loan limit of {0}. "
+				"Lent this shift: {1}. Remaining allowance: {2}"
+			).format(
+				frappe.format_value(maximum_amount, {"fieldtype": "Currency"}),
+				frappe.format_value(shift_total, {"fieldtype": "Currency"}),
+				frappe.format_value(remaining, {"fieldtype": "Currency"}),
+			),
+			title=_("Shift Loan Limit Exceeded"),
 		)
 
-	account = frappe.get_doc(
-		{
-			"doctype": "Account",
-			"account_name": CASH_LOAN_ACCOUNT_NAME,
-			"parent_account": parent_account,
-			"company": company,
-			"is_group": 0,
-			"root_type": "Asset",
-			"report_type": "Balance Sheet",
-		}
+
+def get_shift_loan_total(pos_opening_shift):
+	"""Total submitted cash-loan amount given out this opening shift."""
+	if not pos_opening_shift or not frappe.db.has_column("Journal Entry", "posa_is_cash_loan"):
+		return 0
+
+	total = frappe.db.sql(
+		"""
+		SELECT COALESCE(SUM(posa_loan_amount), 0)
+		FROM `tabJournal Entry`
+		WHERE posa_is_cash_loan = 1
+		  AND posa_pos_opening_shift = %s
+		  AND docstatus = 1
+		""",
+		pos_opening_shift,
 	)
-	account.flags.ignore_permissions = True
-	account.insert()
-
-	return account.name
+	return flt(total[0][0] if total else 0)
 
 
-def get_outstanding_cash_loans(company):
-	"""Return open (unrepaid) cash loan Journal Entries for a company."""
+def _get_remaining_shift_loan_amount(maximum_amount, shift_loan_total):
+	if flt(maximum_amount) <= 0:
+		return 0
+	return max(0, flt(maximum_amount) - flt(shift_loan_total))
+
+
+def get_shift_cash_loans(pos_opening_shift):
+	"""Submitted cash-loan Journal Entries for a shift.
+
+	Server-internal (not whitelisted) -- the twin of expenses.get_pos_expenses,
+	used by pos_closing_shift.make_closing_shift_from_opening to reduce
+	expected cash for the drawer reconciliation.
+	"""
+	if not frappe.db.has_column("Journal Entry", "posa_is_cash_loan"):
+		return []
+
 	loans = frappe.get_all(
 		"Journal Entry",
 		filters={
 			"posa_is_cash_loan": 1,
-			"posa_cash_loan_status": "Open",
-			"company": company,
+			"posa_pos_opening_shift": pos_opening_shift,
 			"docstatus": 1,
 		},
-		fields=[
-			"name",
-			"posa_cash_loan_party_name",
-			"posa_cash_loan_amount",
-			"posting_date",
-			"user_remark",
-		],
+		fields=["name", "posa_loan_amount", "posa_loan_mode_of_payment", "user_remark"],
 		order_by="creation asc",
-		ignore_permissions=True,
 	)
 
-	return [
-		frappe._dict(
-			name=loan.name,
-			journal_entry=loan.name,
-			party_name=loan.posa_cash_loan_party_name,
-			amount=flt(loan.posa_cash_loan_amount),
-			posting_date=loan.posting_date,
-			remarks=(loan.user_remark or "").strip(),
+	rows = []
+	for loan in loans:
+		# The borrower lives on the JE's party-tagged debit row, not a posa_* field.
+		party = frappe.db.get_value(
+			"Journal Entry Account",
+			{"parent": loan.name, "party_type": "Customer"},
+			"party",
 		)
-		for loan in loans
-	]
-
-
-def _create_cash_loan_journal_entry(
-	company,
-	loan_account,
-	payment_account,
-	amount,
-	cost_center,
-	pos_opening_shift,
-	pos_profile,
-	mode_of_payment,
-	party_name,
-	remarks,
-	status,
-	repayment_of,
-	reverse=False,
-):
-	if status == "Open":
-		default_remark = _("Cash loan given to {0}").format(party_name)
-	else:
-		default_remark = _("Cash loan repaid by {0}").format(party_name)
-	user_remark = remarks or default_remark
-
-	loan_account = _ensure_account_name(loan_account, _("Cash Loans Receivable Account"))
-	payment_account = _ensure_account_name(payment_account, _("Payment Account"))
-
-	jv_doc = frappe.get_doc(
-		{
-			"doctype": "Journal Entry",
-			"voucher_type": "Journal Entry",
-			"posting_date": today(),
-			"company": company,
-			"user_remark": user_remark,
-			"cheque_no": pos_opening_shift,
-			"cheque_date": today(),
-			"posa_is_cash_loan": 1,
-			"posa_cash_loan_status": status,
-			"posa_cash_loan_party_name": party_name,
-			"posa_cash_loan_amount": amount,
-			"posa_cash_loan_mode_of_payment": mode_of_payment,
-			"posa_cash_loan_pos_opening_shift": pos_opening_shift,
-			"posa_cash_loan_pos_profile": pos_profile,
-			"posa_cash_loan_repayment_of": repayment_of,
-		}
-	)
-
-	loan_row = jv_doc.append("accounts", {})
-	payment_row = jv_doc.append("accounts", {})
-
-	if not reverse:
-		loan_row.update(
-			{
-				"account": loan_account,
-				"debit_in_account_currency": amount,
-				"credit_in_account_currency": 0,
-				"cost_center": cost_center,
-			}
+		customer_name = frappe.db.get_value("Customer", party, "customer_name") if party else None
+		rows.append(
+			frappe._dict(
+				name=loan.name,
+				journal_entry=loan.name,
+				customer=party,
+				customer_name=customer_name or party,
+				amount=flt(loan.posa_loan_amount),
+				mode_of_payment=loan.posa_loan_mode_of_payment,
+				remarks=(loan.user_remark or "").strip(),
+			)
 		)
-		payment_row.update(
-			{
-				"account": payment_account,
-				"debit_in_account_currency": 0,
-				"credit_in_account_currency": amount,
-				"cost_center": cost_center,
-			}
-		)
-	else:
-		payment_row.update(
-			{
-				"account": payment_account,
-				"debit_in_account_currency": amount,
-				"credit_in_account_currency": 0,
-				"cost_center": cost_center,
-			}
-		)
-		loan_row.update(
-			{
-				"account": loan_account,
-				"debit_in_account_currency": 0,
-				"credit_in_account_currency": amount,
-				"cost_center": cost_center,
-			}
-		)
+	return rows
 
-	jv_doc.flags.ignore_permissions = True
-	jv_doc.insert()
-	jv_doc.submit()
 
-	return jv_doc.name
+@frappe.whitelist()
+def get_customer_loans(customer, company=None):
+	"""Open loan balance for a customer -- the single call every credit/AR
+	surface in pos_next uses. Returns the empty shape when easy_entry is
+	absent, so callers never need their own installed-app guard."""
+	if not customer or not _easy_entry_installed():
+		return {"total_outstanding": 0, "loans": []}
+
+	from easy_entry.api.cash_loan import get_customer_loan_dues
+
+	return get_customer_loan_dues(customer, company)

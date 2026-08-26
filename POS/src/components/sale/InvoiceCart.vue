@@ -944,10 +944,11 @@
 
 					<!-- Cash Loan -->
 					<button
+						v-if="allowCashLoan"
 						type="button"
 						@click="$emit('show-cash-loan')"
 						class="flex flex-col items-center justify-center p-3 sm:p-4 bg-white border border-gray-200 rounded-lg hover:border-teal-300 hover:bg-teal-50 active:bg-teal-100 transition-colors shadow-sm hover:shadow touch-manipulation group"
-						:title="__('Give or repay a cash loan')"
+						:title="__('Give a cash loan')"
 					>
 						<div
 							class="w-9 h-9 sm:w-10 sm:h-10 bg-teal-50 rounded-full flex items-center justify-center mb-2 group-hover:bg-teal-100 transition-colors"
@@ -1702,6 +1703,10 @@ const props = defineProps({
 		default: () => [],
 	},
 	allowPosExpense: {
+		type: Boolean,
+		default: false,
+	},
+	allowCashLoan: {
 		type: Boolean,
 		default: false,
 	},

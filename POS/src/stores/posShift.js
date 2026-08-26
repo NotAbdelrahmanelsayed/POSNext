@@ -28,6 +28,14 @@ export const usePOSShiftStore = defineStore("posShift", () => {
 	const maximumExpenseAmount = computed(
 		() => Number.parseFloat(currentProfile.value?.posa_maximum_expense_amount) || 0,
 	);
+	// bootstrap.py already folds in whether easy_entry is installed, so this
+	// flag alone is enough to decide whether the button should render.
+	const allowCashLoan = computed(
+		() => Number(currentProfile.value?.posa_allow_cash_loan || 0) === 1,
+	);
+	const maximumLoanAmount = computed(
+		() => Number.parseFloat(currentProfile.value?.posa_maximum_loan_amount) || 0,
+	);
 
 	// Actions
 	function updateShiftDuration() {
@@ -112,6 +120,8 @@ export const usePOSShiftStore = defineStore("posShift", () => {
 		writeOffLimit,
 		allowPosExpense,
 		maximumExpenseAmount,
+		allowCashLoan,
+		maximumLoanAmount,
 
 		// Actions
 		updateShiftDuration,
