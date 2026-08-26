@@ -220,7 +220,7 @@
 import { useToast } from "@/composables/useToast";
 import { useFormatters } from "@/composables/useFormatters";
 import { DEFAULT_CURRENCY, formatCurrency as formatCurrencyUtil } from "@/utils/currency";
-import { getInvoiceStatusColor } from "@/utils/invoice";
+import { canCreateReturn as isReturnEligible, getInvoiceStatusColor } from "@/utils/invoice";
 import { Button, Dialog, Input, createResource } from "frappe-ui";
 import { onBeforeUnmount, ref, watch } from "vue";
 import ReturnInvoiceDialog from "./ReturnInvoiceDialog.vue";
@@ -396,13 +396,7 @@ function printInvoice(invoice) {
 }
 
 function canCreateReturn(invoice) {
-	// Can create return if:
-	// 1. Invoice is submitted (docstatus === 1)
-	// 2. Not already a return invoice
-	// 3. Status is not "Credit Note Issued" (already has a return)
-	return (
-		invoice.docstatus === 1 && !invoice.is_return && invoice.status !== "Credit Note Issued"
-	);
+	return isReturnEligible(invoice);
 }
 
 function openReturnModal(invoice) {

@@ -68,12 +68,19 @@ export function toWhatsAppNumber(raw, defaultCountryCode = "20") {
 
 /**
  * Build the WhatsApp message text for a customer statement, with the same
- * total/paid/remaining breakdown shown on the statement image itself.
+ * total/paid/returned/remaining breakdown shown on the statement image itself.
  */
-export function buildStatementMessage({ totalAmount, paid, outstanding }) {
+export function buildStatementMessage({
+	totalAmount,
+	paid,
+	returned,
+	outstanding,
+}) {
+	const hasAmount = (value) => Number.parseFloat(value || 0) > 0.01
 	return [
 		__("Total taken: {0}", [totalAmount]),
-		__("Total paid: {0}", [paid]),
+		...(hasAmount(paid) ? [__("Total paid: {0}", [paid])] : []),
+		...(hasAmount(returned) ? [__("Total returned: {0}", [returned])] : []),
 		__("Total remaining: {0}", [outstanding]),
 	].join("\n")
 }
@@ -88,6 +95,13 @@ async function copyImageToClipboard(blob) {
 	} catch {
 		return false
 	}
+}
+
+/** Fetch a statement image and copy it to the system clipboard. */
+export async function copyStatementImage(imageUrl) {
+	const response = await fetch(imageUrl)
+	const blob = await response.blob()
+	return copyImageToClipboard(blob)
 }
 
 /**

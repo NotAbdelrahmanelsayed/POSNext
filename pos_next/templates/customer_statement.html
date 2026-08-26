@@ -62,7 +62,12 @@ td:not(:first-child) { text-align: {{ text_align_end }}; }
   </div>
   <div class="summary">
     <div class="summary-row"><span class="summary-label">{{ _("Total") }}</span><span class="summary-value">{{ total_amount_formatted }}</span></div>
+    {% if paid_amount > 0.01 %}
     <div class="summary-row"><span class="summary-label">{{ _("Paid") }}</span><span class="summary-value">{{ paid_formatted }}</span></div>
+    {% endif %}
+    {% if returned_amount > 0.01 %}
+    <div class="summary-row"><span class="summary-label">{{ _("Returned") }}</span><span class="summary-value">{{ returned_formatted }}</span></div>
+    {% endif %}
     <div class="summary-row net"><span class="summary-label">{{ _("Remaining") }}</span><span class="summary-value">{{ outstanding_formatted }}</span></div>
   </div>
   <div class="doc-footer">Powered by <strong>Abdelrahman Elsayed 01000488181</strong></div>

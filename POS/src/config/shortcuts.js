@@ -22,7 +22,9 @@ export function getShortcutGroups() {
 			title: __("Checkout"),
 			shortcuts: [
 				{ keys: ["Alt", "1–9"], label: __("Select payment method") },
-				{ keys: ["Alt", "C"], label: __("Pay on Account") },
+				{ keys: ["0–9"], label: __("Type an amount on the numpad") },
+				{ keys: ["Enter"], label: __("Add typed amount, or pay when fully covered") },
+				{ keys: ["Alt", "C"], label: __("Pay rest on account") },
 			],
 		},
 		{

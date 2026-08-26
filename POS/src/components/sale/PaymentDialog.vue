@@ -867,7 +867,10 @@
 								<div
 									v-if="remainingAmount > 0 && !applyWriteOff"
 									:class="[
-										'bg-orange-50 text-center',
+										'bg-orange-50 text-center transition-all duration-200',
+											remainingPulse
+												? 'ring-2 ring-inset ring-orange-400 bg-orange-100 scale-[1.02]'
+												: '',
 										isCompactMode ? 'p-2' : 'p-3',
 									]"
 								>
@@ -1359,7 +1362,7 @@
 								v-if="quickAmounts.length > 0"
 								ref="firstQuickAmountBtnRef"
 								@click="addCustomPayment(lastSelectedMethod, quickAmounts[0])"
-								@keydown.enter.stop.prevent="handleFirstQuickAmountEnter"
+								@keydown.enter.stop.prevent="handlePaymentEnter"
 								:disabled="isQuickAmountDisabled(quickAmounts[0])"
 								:class="[
 									'font-semibold rounded-lg border-2 transition-all',
@@ -1824,7 +1827,15 @@
 										: 'bg-blue-600 border-2 border-blue-600 hover:bg-blue-700 text-white',
 								]"
 							>
-								{{ __("Add") }}
+								<span class="flex flex-col items-center justify-center gap-1">
+									<span>{{ __("Add") }}</span>
+									<kbd
+										v-if="numpadValue > 0 && lastSelectedMethod"
+										class="text-[10px] font-medium px-1.5 py-0.5 rounded bg-white/20 border border-white/30"
+									>
+										{{ __("Enter") }}
+									</kbd>
+								</span>
 							</button>
 
 							<!-- Row 4: 00, 0, . -->
@@ -1966,6 +1977,12 @@
 							<span>{{
 								isSubmitting ? __("Processing...") : paymentButtonText
 							}}</span>
+							<kbd
+								v-if="canComplete && !isSubmitting && !numpadValue"
+								class="text-[10px] font-medium px-1.5 py-0.5 rounded bg-white/20 border border-white/30"
+							>
+								{{ __("Enter") }}
+							</kbd>
 						</button>
 					</div>
 				</div>
@@ -2234,18 +2251,88 @@ watch(
 	}
 );
 
-// Handle Enter key from numpad keyboard input
-function handleNumpadEnter(value) {
-	if (value > 0 && lastSelectedMethod.value) {
-		numpadAddPayment();
-		nextTick(() => {
-			if (remainingAmount.value === 0 && totalPaid.value > 0 && canComplete.value) {
-				completePayment();
-			}
-		});
-	} else if (remainingAmount.value === 0 && totalPaid.value > 0 && canComplete.value) {
-		// If fully paid and can complete, trigger complete payment
+// Brief highlight on the Remaining figure when Enter has nothing to do (see rule 4 below).
+const remainingPulse = ref(false);
+let remainingPulseTimer = null;
+function pulseRemaining() {
+	remainingPulse.value = true;
+	clearTimeout(remainingPulseTimer);
+	remainingPulseTimer = setTimeout(() => {
+		remainingPulse.value = false;
+	}, 600);
+}
+
+/**
+ * The single Enter rule for the payment dialog. Shared by the numpad's window
+ * listener, the focused quick-amount button, and the mobile amount input so the
+ * three surfaces cannot drift apart.
+ *
+ *   typed amount        → add it to the selected method (pay only if it clears the balance)
+ *   empty + covered     → pay
+ *   empty + nothing yet → full remaining on the selected method + pay (the fast path)
+ *   empty + part paid   → nothing; the cashier must pick a method (Alt+1–9) or Alt+C
+ *
+ * The last case is deliberate: Enter must never put money on a method the cashier
+ * did not choose, nor silently turn the sale into customer debt.
+ *
+ * @param {number} typed - amount currently in the numpad/input buffer (0 if empty)
+ * @param {Function} clearInput - clears whichever buffer the amount came from
+ */
+async function applyPaymentEnter(typed, clearInput) {
+	if (props.isSubmitting) return;
+
+	if (typed > 0) {
+		if (!lastSelectedMethod.value) return;
+		await addCustomPayment(lastSelectedMethod.value, typed);
+		clearInput();
+		await nextTick();
+		if (remainingAmount.value === 0 && canComplete.value && !props.isSubmitting) {
+			completePayment();
+		}
+		return;
+	}
+
+	if (canComplete.value) {
 		completePayment();
+		return;
+	}
+
+	if (paymentEntries.value.length === 0 && lastSelectedMethod.value && quickAmounts.value?.[0]) {
+		await addCustomPayment(lastSelectedMethod.value, quickAmounts.value[0]);
+		await nextTick();
+		if (canComplete.value && !props.isSubmitting) {
+			completePayment();
+		}
+		return;
+	}
+
+	pulseRemaining();
+}
+
+function handlePaymentEnter() {
+	applyPaymentEnter(numpadValue.value, numpadClear);
+}
+
+/**
+ * Alt+C. With no payments yet this is a full credit sale. Once money has been
+ * taken, it must instead park only the outstanding balance on the receivable
+ * account — addCreditAccountPayment() emits `payments: []` and would throw the
+ * collected cash away.
+ */
+function payRestOnAccount() {
+	if (paymentEntries.value.length === 0) {
+		addCreditAccountPayment();
+		return;
+	}
+	const acc = selectedReceivableAccount.value || receivableAccounts.value[0]?.name;
+	if (!acc) {
+		showWarning(__("No receivable account available for this customer"));
+		return;
+	}
+	// toggleReceivableAccount() carries side effects, so go through it rather than
+	// assigning the ref — but it toggles off when handed the current selection.
+	if (selectedReceivableAccount.value !== acc) {
+		toggleReceivableAccount(acc);
 	}
 }
 
@@ -2256,7 +2343,7 @@ function handlePaymentMethodShortcut(event) {
 	// Alt+C → Pay on Account
 	if (event.code === "KeyC" && props.allowCreditSale && !props.isSubmitting) {
 		event.preventDefault();
-		addCreditAccountPayment();
+		payRestOnAccount();
 		return;
 	}
 
@@ -2283,7 +2370,7 @@ onUnmounted(() => window.removeEventListener("keydown", handlePaymentMethodShort
 const { numpadDisplay, numpadValue, numpadInput, numpadBackspace, numpadClear, setNumpadValue } =
 	usePaymentNumpad({
 		isEnabled: computed(() => props.modelValue), // Only enabled when dialog is open
-		onEnter: handleNumpadEnter,
+		onEnter: handlePaymentEnter,
 	});
 
 // Mobile custom amount state
@@ -2301,31 +2388,15 @@ function addMobileCustomPayment() {
 	}
 }
 
-async function handleMobileAmountEnter() {
-	const amount = Number.parseFloat(mobileCustomAmount.value)
-	if (amount > 0 && lastSelectedMethod.value) {
-		await addCustomPayment(lastSelectedMethod.value, amount)
-		mobileCustomAmount.value = ""
+function handleMobileAmountEnter() {
+	const amount = Number.parseFloat(mobileCustomAmount.value);
+	applyPaymentEnter(Number.isNaN(amount) ? 0 : amount, () => {
+		mobileCustomAmount.value = "";
 		nextTick(() => {
-			mobileAmountInputRef.value?.focus()
-			mobileAmountInputRef.value?.select()
-		})
-		if (canComplete.value && !isSubmitting.value) {
-			completePayment()
-		}
-	} else if (canComplete.value && !isSubmitting.value) {
-		completePayment()
-	} else if (props.allowCreditSale && paymentEntries.value.length === 0) {
-		addCreditAccountPayment()
-	}
-}
-
-async function handleFirstQuickAmountEnter() {
-	if (!lastSelectedMethod.value || !quickAmounts.value?.[0]) return
-	await addCustomPayment(lastSelectedMethod.value, quickAmounts.value[0])
-	if (canComplete.value && !isSubmitting.value) {
-		completePayment()
-	}
+			mobileAmountInputRef.value?.focus();
+			mobileAmountInputRef.value?.select();
+		});
+	});
 }
 
 function numpadAddPayment() {

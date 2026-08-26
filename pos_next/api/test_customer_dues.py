@@ -85,6 +85,43 @@ class TestCreditCustomersSummary(unittest.TestCase):
 			customer_dues.get_credit_customers_summary(company="Sonex")
 
 
+class TestCustomerStatementBreakdown(unittest.TestCase):
+	def test_paid_and_returned_are_calculated_independently(self):
+		for label, total, remaining, returned, expected_paid, expected_returned in [
+			("payment only", 240, 140, 0, 100, 0),
+			("return only", 240, 140, 100, 0, 100),
+			("payment and return", 240, 40, 100, 100, 100),
+			("neither", 240, 240, 0, 0, 0),
+			("rounding noise", 240, 239.995, 0, 0, 0),
+		]:
+			with self.subTest(label=label):
+				paid, calculated_returned = customer_dues._get_statement_breakdown(
+					total, remaining, returned
+				)
+				self.assertEqual(paid, expected_paid)
+				self.assertEqual(calculated_returned, expected_returned)
+
+	@patch("pos_next.api.customer_dues.frappe.get_all")
+	def test_returned_amount_uses_only_linked_submitted_returns(self, mock_get_all):
+		mock_get_all.return_value = [{"grand_total": -100}, {"grand_total": -25}]
+
+		returned = customer_dues._get_linked_return_amount(
+			"CUST-A", ["INV-0001", "INV-0002"], "Sonex"
+		)
+
+		self.assertEqual(returned, 125)
+		self.assertEqual(
+			mock_get_all.call_args.kwargs["filters"],
+			{
+				"customer": "CUST-A",
+				"docstatus": 1,
+				"is_return": 1,
+				"return_against": ["in", ["INV-0001", "INV-0002"]],
+				"company": "Sonex",
+			},
+		)
+
+
 class TestPayCustomerDue(unittest.TestCase):
 	"""
 	Regression coverage for the pay-all bug: a single-invoice payment must never spill

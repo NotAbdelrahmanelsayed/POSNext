@@ -70,3 +70,16 @@ export function getInvoiceStatusTheme(status) {
 
 	return "gray";
 }
+
+/**
+ * Whether a submitted sales invoice can be used as the source for a return.
+ * Customer account statements only return submitted invoices, so docstatus is
+ * optional there; invoice history includes it and must explicitly be submitted.
+ */
+export function canCreateReturn(invoice) {
+	if (!invoice || invoice.is_return || invoice.status === "Credit Note Issued") {
+		return false;
+	}
+
+	return invoice.docstatus === undefined || invoice.docstatus === 1;
+}

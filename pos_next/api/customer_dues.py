@@ -68,7 +68,7 @@ def get_customer_due_statement(customer, pos_profile=None, company=None, limit=1
 	Returns:
 		{
 		    summary: {total_outstanding, total_credit, net_balance,
-		              due_count, settled_count},
+		              total_paid, total_returned, due_count, settled_count},
 		    due_invoices: [...],     # outstanding > 0, oldest first; enriched with payment history
 		    settled_invoices: [...], # outstanding <= 0 or is_return, recent first; capped
 		    currency: str,
@@ -116,6 +116,11 @@ def get_customer_due_statement(customer, pos_profile=None, company=None, limit=1
 	for inv in due_invoices:
 		enrich_invoice_with_payment_history(inv)
 
+	# A return is a separate statement component. Only count submitted returns
+	# explicitly linked to invoices which are still outstanding.
+	due_invoice_names = [inv["name"] for inv in due_invoices]
+	total_returned = _get_linked_return_amount(customer, due_invoice_names, company)
+
 	# ── Settled / return invoices (recent first, capped) ─────────────────────
 	settled_filters = {
 		"customer": customer,
@@ -150,6 +155,25 @@ def get_customer_due_statement(customer, pos_profile=None, company=None, limit=1
 		for inv in due_invoices + settled_invoices:
 			inv["items"] = items_by_invoice.get(inv["name"], [])
 
+	# Keep the statement total aligned with the item aggregation used by the
+	# browser printout and downloadable image. Fall back to invoice totals for
+	# legacy/malformed invoices with no item rows.
+	total = sum(
+		flt(item.get("amount"))
+		for inv in due_invoices
+		for item in inv.get("items", [])
+	)
+	if not total and due_invoices:
+		total = sum(flt(inv.get("grand_total")) for inv in due_invoices)
+
+	paid, total_returned = _get_statement_breakdown(
+		total,
+		summary["total_outstanding"],
+		total_returned,
+	)
+	summary["total_paid"] = flt(paid)
+	summary["total_returned"] = flt(total_returned)
+
 	# ── Currency (from first invoice or company default) ─────────────────────
 	currency = (
 		(due_invoices or settled_invoices or [{}])[0].get("currency")
@@ -166,6 +190,35 @@ def get_customer_due_statement(customer, pos_profile=None, company=None, limit=1
 		"settled_invoices": settled_invoices,
 		"currency": currency,
 	}
+
+
+def _get_linked_return_amount(customer, due_invoice_names, company=None):
+	"""Return the absolute value of submitted returns linked to due invoices."""
+	if not due_invoice_names:
+		return 0.0
+
+	filters = {
+		"customer": customer,
+		"docstatus": 1,
+		"is_return": 1,
+		"return_against": ["in", due_invoice_names],
+	}
+	if company:
+		filters["company"] = company
+
+	returns = frappe.get_all("Sales Invoice", filters=filters, fields=["grand_total"])
+	return sum(abs(flt(row.get("grand_total"))) for row in returns)
+
+
+def _get_statement_breakdown(total, remaining, returned):
+	"""Split a statement reduction into actual payments and linked returns."""
+	returned = flt(returned)
+	paid = max(0, flt(total) - flt(remaining) - returned)
+	if paid < AMOUNT_TOLERANCE:
+		paid = 0.0
+	if returned < AMOUNT_TOLERANCE:
+		returned = 0.0
+	return flt(paid), flt(returned)
 
 
 @frappe.whitelist()
