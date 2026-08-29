@@ -705,6 +705,12 @@
 												:description="__('Enable product returns')"
 											/>
 											<CheckboxField
+												v-if="settings.allow_return"
+												v-model="settings.allow_amount_only_return"
+												:label="__('Allow Amount Only Return')"
+												:description="__('Allow refunding an arbitrary amount without returning goods')"
+											/>
+											<CheckboxField
 												v-model="settings.allow_write_off_change"
 												:label="__('Allow Write Off Change')"
 												:description="__('Write off small change amounts')"
@@ -1267,6 +1273,7 @@ const settings = ref({
 	disable_rounded_total: 1,
 	allow_credit_sale: 0,
 	allow_return: 0,
+	allow_amount_only_return: 1,
 	allow_write_off_change: 0,
 	allow_partial_payment: 0,
 	silent_print: 0,

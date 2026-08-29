@@ -418,8 +418,95 @@
 					</div>
 				</div>
 
+				<!-- Return Mode Switch -->
+				<div
+					v-if="originalInvoice && posSettingsStore.settings.allow_amount_only_return"
+					class="inline-flex self-start rounded-lg border border-gray-200 bg-gray-50 p-1"
+				>
+					<button
+						type="button"
+						@click="returnMode = 'items'"
+						:class="[
+							'px-3 py-1.5 text-xs font-semibold rounded-md transition-colors',
+							returnMode === 'items'
+								? 'bg-white text-gray-900 shadow-sm'
+								: 'text-gray-500 hover:text-gray-700',
+						]"
+					>
+						{{ __("By Items") }}
+					</button>
+					<button
+						type="button"
+						@click="returnMode = 'amount'"
+						:class="[
+							'px-3 py-1.5 text-xs font-semibold rounded-md transition-colors',
+							returnMode === 'amount'
+								? 'bg-white text-gray-900 shadow-sm'
+								: 'text-gray-500 hover:text-gray-700',
+						]"
+					>
+						{{ __("By Amount") }}
+					</button>
+				</div>
+
+				<!-- By Amount Panel -->
+				<div
+					v-if="originalInvoice && returnMode === 'amount'"
+					class="bg-white border border-gray-200 rounded-xl p-4 flex flex-col gap-3"
+				>
+					<div class="grid grid-cols-3 gap-3 text-center">
+						<div>
+							<p class="text-xs text-gray-500">{{ __("Grand Total") }}</p>
+							<p class="text-sm font-bold text-gray-900">
+								{{ formatCurrency(originalInvoice.grand_total) }}
+							</p>
+						</div>
+						<div>
+							<p class="text-xs text-gray-500">{{ __("Already Returned") }}</p>
+							<p class="text-sm font-bold text-gray-900">
+								{{
+									formatCurrency(
+										Math.abs(originalInvoice.grand_total) -
+											remainingReturnableValue
+									)
+								}}
+							</p>
+						</div>
+						<div>
+							<p class="text-xs text-gray-500">{{ __("Remaining Returnable") }}</p>
+							<p class="text-sm font-bold text-emerald-700">
+								{{ formatCurrency(remainingReturnableValue) }}
+							</p>
+						</div>
+					</div>
+					<div>
+						<label class="block text-sm font-medium text-gray-700 mb-2 text-start">
+							{{ __("Refund Amount") }}
+						</label>
+						<input
+							v-model.number="refundAmount"
+							type="number"
+							min="0.01"
+							:max="remainingReturnableValue"
+							step="0.01"
+							:placeholder="__('Enter amount to refund')"
+							class="w-full px-4 py-3 border border-gray-300 rounded-xl text-lg font-bold text-center focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+						/>
+						<p
+							v-if="refundAmount > remainingReturnableValue"
+							class="mt-2 text-xs text-red-600 text-start"
+						>
+							{{
+								__("Amount cannot exceed the remaining returnable value ({0})", [
+									formatCurrency(remainingReturnableValue),
+								])
+							}}
+						</p>
+					</div>
+				</div>
+
 				<!-- Return Items -->
-				<div v-if="originalInvoice">
+				<div v-if="originalInvoice && returnMode === 'items'">
 					<div
 						class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3 gap-2"
 					>
@@ -718,7 +805,7 @@
 				</div>
 
 				<!-- Payment Methods Selection -->
-				<div v-if="selectedItems.length > 0">
+				<div v-if="hasReturnSelection">
 					<!-- Credit Sale Return Notice -->
 					<div
 						v-if="isOriginalCreditSale"
@@ -939,9 +1026,7 @@
 										: __("Total Refund:")
 								}}</span>
 								<span class="font-bold text-gray-900">{{
-									formatCurrency(
-										isPartiallyPaid ? maxRefundableAmount : returnTotal
-									)
+									formatCurrency(refundTargetAmount)
 								}}</span>
 							</div>
 							<div class="flex items-center justify-between text-sm mt-1">
@@ -949,32 +1034,28 @@
 								<span
 									:class="[
 										'font-bold',
-										Math.abs(
-											totalPaymentAmount -
-												(isPartiallyPaid
-													? maxRefundableAmount
-													: returnTotal)
-										) < 0.01
-											? 'text-green-600'
-											: 'text-red-600',
+										totalPaymentAmount > refundTargetAmount + 0.01
+											? 'text-red-600'
+											: 'text-green-600',
 									]"
 								>
 									{{ formatCurrency(totalPaymentAmount) }}
 								</span>
 							</div>
 							<p
-								v-if="
-									Math.abs(
-										totalPaymentAmount -
-											(isPartiallyPaid ? maxRefundableAmount : returnTotal)
-									) >= 0.01
-								"
-								class="mt-2 text-xs text-amber-600 text-start"
+								v-if="totalPaymentAmount > refundTargetAmount + 0.01"
+								class="mt-2 text-xs text-red-600 text-start"
+							>
+								{{ __("⚠️ Payment total cannot exceed the refund amount") }}
+							</p>
+							<p
+								v-else-if="refundTargetAmount - totalPaymentAmount >= 0.01"
+								class="mt-2 text-xs text-blue-600 text-start"
 							>
 								{{
-									isPartiallyPaid
-										? __("⚠️ Payment total must equal refundable amount")
-										: __("⚠️ Payment total must equal refund amount")
+									__("ℹ️ The remaining {0} will stay as customer credit", [
+										formatCurrency(refundTargetAmount - totalPaymentAmount),
+									])
 								}}
 							</p>
 						</div>
@@ -983,7 +1064,7 @@
 
 				<!-- Return Summary -->
 				<div
-					v-if="selectedItems.length > 0"
+					v-if="hasReturnSelection"
 					class="bg-gradient-to-br from-red-50 to-orange-50 rounded-xl p-4 sm:p-5 border border-red-200 shadow-sm"
 				>
 					<div class="flex items-center gap-2 mb-3">
@@ -994,7 +1075,7 @@
 						<h3 class="text-sm font-bold text-gray-900">{{ __("Return Summary") }}</h3>
 					</div>
 					<div class="flex flex-col gap-2">
-						<div class="flex justify-between items-center">
+						<div v-if="returnMode === 'items'" class="flex justify-between items-center">
 							<span class="text-sm text-gray-600">{{ __("Items to Return:") }}</span>
 							<span
 								class="px-2 py-1 bg-white rounded-lg text-sm font-bold text-gray-900 border border-red-200"
@@ -1033,7 +1114,7 @@
 				</div>
 
 				<!-- Return Reason -->
-				<div v-if="selectedItems.length > 0">
+				<div v-if="hasReturnSelection">
 					<label class="block text-sm font-medium text-gray-700 mb-2 text-start">
 						{{ __("Return Reason") }}
 						<span class="text-gray-400">({{ __("optional") }})</span>
@@ -1189,11 +1270,13 @@ import {
 	roundCurrency,
 } from "@/utils/currency";
 import { getInvoiceStatusColor } from "@/utils/invoice";
+import { usePOSSettingsStore } from "@/stores/posSettings";
 import { Button, Dialog, FeatherIcon, createResource } from "frappe-ui";
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 
 const { showSuccess, showError, showWarning } = useToast();
 const { isOffline } = useOfflineStatus();
+const posSettingsStore = usePOSSettingsStore();
 
 // ============================================
 // Constants (hoisted for performance)
@@ -1205,6 +1288,9 @@ const MAX_SUGGESTIONS = 8;
 const SEARCH_DEBOUNCE_MS = 300;
 const MIN_SEARCH_LENGTH = 2;
 const MIN_SERVER_SEARCH_LENGTH = 4;
+
+// Round to 6 decimal places (qty precision, matches the plan's rounding-drift correction)
+const flt6 = (n) => Math.round(n * 1e6) / 1e6;
 
 const props = defineProps({
 	modelValue: Boolean,
@@ -1238,6 +1324,11 @@ const submitError = ref("");
 const isSubmitting = ref(false);
 // When true, return amount is added to customer credit balance instead of cash refund
 const addToCustomerCredit = ref(false);
+
+// "items" = current per-item quantity flow, "amount" = refund an arbitrary EGP amount,
+// scaled proportionally across all remaining lines, without moving stock.
+const returnMode = ref("items");
+const refundAmount = ref(0);
 
 // Autocomplete state
 const invoiceSearchInput = ref(null);
@@ -1378,7 +1469,11 @@ const fetchInvoiceResource = createResource({
 				payments: origInvoice.payments || [],
 				docstatus: 1, // Already validated by backend
 				is_return: 0,
+				remaining_value: origInvoice.remaining_value || 0,
 			};
+
+			returnMode.value = "items";
+			refundAmount.value = 0;
 
 			// Map items for UI display and selection.
 			// - sales_invoice_item: links to original item row for accurate return tracking
@@ -1452,7 +1547,9 @@ const createReturnResource = createResource({
 			// which reduces its outstanding amount and updates its status
 			update_outstanding_for_self: 0,
 			is_pos: 1,
-			update_stock: 1,
+			// Amount-only returns refund money without moving stock back.
+			update_stock: isAmountMode.value ? 0 : 1,
+			posa_is_amount_only_return: isAmountMode.value ? 1 : 0,
 			// Include sales_team from the prepared document.
 			// This ensures sales commission is reversed for the returned items.
 			sales_team:
@@ -1461,17 +1558,19 @@ const createReturnResource = createResource({
 					allocated_percentage: member.allocated_percentage || 0,
 				})) || [],
 			// Build items array from user's selection with negative quantities for return
-			items: selectedItems.value.map((item) => ({
-				item_code: item.item_code,
-				item_name: item.item_name,
-				qty: -Math.abs(item.return_qty),
-				rate: item.rate,
-				warehouse: item.warehouse,
-				uom: item.uom,
-				conversion_factor: item.conversion_factor || 1,
-				// Link to original invoice item row for accurate return tracking in ERPNext
-				sales_invoice_item: item.name,
-			})),
+			items: isAmountMode.value
+				? amountModeItems.value
+				: selectedItems.value.map((item) => ({
+						item_code: item.item_code,
+						item_name: item.item_name,
+						qty: -Math.abs(item.return_qty),
+						rate: item.rate,
+						warehouse: item.warehouse,
+						uom: item.uom,
+						conversion_factor: item.conversion_factor || 1,
+						// Link to original invoice item row for accurate return tracking in ERPNext
+						sales_invoice_item: item.name,
+				  })),
 			// Flag to indicate return amount should be added to customer credit balance
 			add_to_customer_balance: addToCustomerCredit.value,
 			// Payment amounts are negative for refunds
@@ -1599,16 +1698,79 @@ const filteredReturnItems = computed(() => {
 
 const hasOpenShift = computed(() => Boolean(props.posOpeningShift));
 
+const isAmountMode = computed(() => returnMode.value === "amount");
+
+// Whether the caller has made a selection worth submitting, in either mode.
+const hasReturnSelection = computed(() =>
+	isAmountMode.value ? refundAmount.value > 0 : selectedItems.value.length > 0
+);
+
+// Total returnable value remaining on the invoice (server-computed, falls back
+// to summing all still-returnable lines if the server value isn't present yet).
+const remainingReturnableValue = computed(() => {
+	if (originalInvoice.value?.remaining_value) return originalInvoice.value.remaining_value;
+	return roundCurrency(
+		returnItems.value.reduce(
+			(sum, item) =>
+				sum + roundCurrency(item.remaining_qty * (item.rate_with_tax || item.rate)),
+			0
+		)
+	);
+});
+
 // Use rate_with_tax (includes tax) for accurate refund calculation
-const returnTotal = computed(() =>
-	roundCurrency(
+const returnTotal = computed(() => {
+	if (isAmountMode.value) return roundCurrency(refundAmount.value || 0);
+	return roundCurrency(
 		selectedItems.value.reduce(
 			(sum, item) =>
 				sum + roundCurrency(item.return_qty * (item.rate_with_tax || item.rate)),
 			0
 		)
-	)
-);
+	);
+});
+
+// Scales every remaining line proportionally to refundAmount / remainingReturnableValue,
+// so partial money-only refunds keep per-line rates honest and leave the rest returnable.
+const amountModeItems = computed(() => {
+	const total = remainingReturnableValue.value;
+	const amount = roundCurrency(refundAmount.value || 0);
+	if (!total || !amount) return [];
+
+	const factor = amount / total;
+	const lines = returnItems.value.map((item) => ({
+		item,
+		qty: -flt6(item.remaining_qty * factor),
+	}));
+
+	// Correct rounding drift on the highest-value line so the total lands exactly on refundAmount.
+	const currentTotal = lines.reduce(
+		(sum, line) => sum + line.qty * (line.item.rate_with_tax || line.item.rate),
+		0
+	);
+	const delta = roundCurrency(-amount - currentTotal);
+	if (delta && lines.length) {
+		const biggest = lines.reduce((max, line) =>
+			Math.abs(line.qty * (line.item.rate_with_tax || line.item.rate)) >
+			Math.abs(max.qty * (max.item.rate_with_tax || max.item.rate))
+				? line
+				: max
+		);
+		const rate = biggest.item.rate_with_tax || biggest.item.rate;
+		if (rate) biggest.qty = flt6(biggest.qty + delta / rate);
+	}
+
+	return lines.map((line) => ({
+		item_code: line.item.item_code,
+		item_name: line.item.item_name,
+		qty: line.qty,
+		rate: line.item.rate,
+		warehouse: line.item.warehouse,
+		uom: line.item.uom,
+		conversion_factor: line.item.conversion_factor || 1,
+		sales_invoice_item: line.item.name,
+	}));
+});
 
 const totalPaymentAmount = computed(() =>
 	roundCurrency(
@@ -1624,6 +1786,11 @@ const maxRefundableAmount = computed(() => {
 	const returnRatio = returnTotal.value / grandTotal;
 	return roundCurrency(Math.min(returnTotal.value, originalPaidAmount.value * returnRatio));
 });
+
+// The cash amount refund payments are expected to add up to.
+const refundTargetAmount = computed(() =>
+	isPartiallyPaid.value ? maxRefundableAmount.value : returnTotal.value
+);
 
 // Amount that goes toward credit balance (for partially paid invoices)
 const creditAdjustmentAmount = computed(() =>
@@ -1648,8 +1815,7 @@ const paymentSelectStyle = {
 };
 
 const canCreateReturn = computed(() => {
-	const hasSelectedItems = selectedItems.value.length > 0;
-	if (!hasSelectedItems || !hasOpenShift.value) return false;
+	if (!hasReturnSelection.value || !hasOpenShift.value) return false;
 	// Credit sale returns and "add to customer credit" returns don't need payment validation
 	if (isOriginalCreditSale.value || addToCustomerCredit.value) return true;
 
@@ -1659,17 +1825,16 @@ const canCreateReturn = computed(() => {
 		const hasValidPayments = payments.every(
 			(payment) => payment.mode_of_payment && payment.amount >= 0
 		);
-		return (
-			hasValidPayments &&
-			Math.abs(totalPaymentAmount.value - maxRefundableAmount.value) < 0.01
-		);
+		// A refund smaller than the refundable amount is legal — the remainder
+		// simply stays outstanding as customer credit. Over-refunds stay blocked.
+		return hasValidPayments && totalPaymentAmount.value <= maxRefundableAmount.value + 0.01;
 	}
 
 	if (!payments.length) return false;
 	const hasValidPayments = payments.every(
 		(payment) => payment.mode_of_payment && payment.amount > 0
 	);
-	return hasValidPayments && Math.abs(totalPaymentAmount.value - returnTotal.value) < 0.01;
+	return hasValidPayments && totalPaymentAmount.value <= returnTotal.value + 0.01;
 });
 
 // Shared filter function to avoid duplicate code
@@ -2060,6 +2225,10 @@ function resetForm() {
 
 	// Reset customer credit option
 	addToCustomerCredit.value = false;
+
+	// Reset amount-only return state
+	returnMode.value = "items";
+	refundAmount.value = 0;
 }
 
 // Date formatter instance (reused for performance)

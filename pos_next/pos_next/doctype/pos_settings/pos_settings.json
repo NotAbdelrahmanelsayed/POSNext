@@ -46,6 +46,7 @@
   "column_break_operations",
   "allow_return_without_invoice",
   "return_validity_days",
+  "allow_amount_only_return",
   "allow_free_batch_return",
   "allow_print_draft_invoices",
   "section_break_pricing",
@@ -369,6 +370,14 @@
    "fieldname": "return_validity_days",
    "fieldtype": "Int",
    "label": "Return Validity Days"
+  },
+  {
+   "default": "1",
+   "depends_on": "allow_return",
+   "description": "Allow refunding an arbitrary amount without returning goods",
+   "fieldname": "allow_amount_only_return",
+   "fieldtype": "Check",
+   "label": "Allow Amount Only Return"
   },
   {
    "default": "0",

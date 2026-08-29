@@ -468,7 +468,10 @@ def _process_invoice(invoice, invoice_field, company_currency, cash_mode, paymen
 
 	# Collected amount drives the sales summary / per-row totals; the full
 	# invoice value is preserved separately for display and reconciliation.
-	collected = base_grand_total if is_return else base_paid
+	# Returns use base_paid (the real refund) rather than the full credit
+	# note value, so a partial (amount-only) refund reconciles against the
+	# actual money that left the drawer.
+	collected = base_paid
 
 	# Build transaction record
 	transaction = frappe._dict({
@@ -490,9 +493,9 @@ def _process_invoice(invoice, invoice_field, company_currency, cash_mode, paymen
 	summary["total_quantity"] += flt(invoice.total_qty)
 
 	if is_return:
-		summary["grand_total"] += base_grand_total
+		summary["grand_total"] += base_paid
 		summary["net_total"] += base_net_total
-		summary["returns_total"] += abs(base_grand_total)
+		summary["returns_total"] += abs(base_paid)
 		summary["returns_count"] += 1
 	else:
 		# Net Sales == money collected, keeping net proportional to what was paid.

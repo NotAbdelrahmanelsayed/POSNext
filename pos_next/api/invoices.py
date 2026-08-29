@@ -522,6 +522,27 @@ def _should_block(pos_profile):
 	return True
 
 
+def _assert_amount_return_allowed(pos_profile):
+	"""Throw unless the POS Profile's POS Settings allow amount-only returns."""
+	if not cint(
+		frappe.db.get_value("POS Settings", {"pos_profile": pos_profile}, "allow_amount_only_return")
+	):
+		frappe.throw(_("Amount-only returns are disabled for this POS Profile"))
+
+
+def _is_amount_only_return(data, pos_profile):
+	"""True if this payload is a return that should skip stock movement.
+
+	Validates the request against POS Settings when the flag is set, so a
+	stale/tampered client cannot silently bypass the server-side guard.
+	"""
+	if not (data.get("is_return") and cint(data.get("posa_is_amount_only_return"))):
+		return False
+
+	_assert_amount_return_allowed(pos_profile)
+	return True
+
+
 def _validate_stock_on_invoice(invoice_doc):
 	"""Validate stock availability before submission."""
 	if invoice_doc.doctype == "Sales Invoice" and not cint(getattr(invoice_doc, "update_stock", 0)):
@@ -604,7 +625,6 @@ def validate_return_items(original_invoice_name, return_items, doctype="Sales In
 	Uses query builder for parameterized queries. Fetches invoice details, original
 	item quantities, and already-returned quantities in 3 queries total.
 	"""
-	from frappe.query_builder.functions import Abs, Sum
 	from frappe.utils import date_diff, getdate
 
 	if isinstance(return_items, str):
@@ -641,40 +661,48 @@ def validate_return_items(original_invoice_name, return_items, doctype="Sales In
 					).format(original_invoice_name, days_since_invoice, return_validity_days),
 				}
 
-	# Aggregate original item quantities by item_code
+	# Aggregate original item quantities (and value) by item_code
 	si_item = frappe.qb.DocType(f"{doctype} Item")
 	original_items = (
 		frappe.qb.from_(si_item)
-		.select(si_item.item_code, Sum(si_item.qty).as_("total_qty"))
+		.select(si_item.item_code, si_item.qty, si_item.rate)
 		.where(si_item.parent == original_invoice_name)
-		.groupby(si_item.item_code)
 	).run(as_dict=True)
 
-	original_item_qty = {item.item_code: flt(item.total_qty) for item in original_items}
+	original_item_qty = {}
+	original_item_value = {}
+	for item in original_items:
+		original_item_qty[item.item_code] = original_item_qty.get(item.item_code, 0) + flt(item.qty)
+		original_item_value[item.item_code] = original_item_value.get(item.item_code, 0) + flt(
+			item.qty
+		) * flt(item.rate)
 
 	# Aggregate quantities already returned from previous return invoices
 	ret_si = frappe.qb.DocType(doctype)
 	ret_item = frappe.qb.DocType(f"{doctype} Item")
 
-	returned_qty_data = (
+	returned_data = (
 		frappe.qb.from_(ret_si)
 		.inner_join(ret_item)
 		.on(ret_item.parent == ret_si.name)
-		.select(ret_item.item_code, Sum(Abs(ret_item.qty)).as_("returned_qty"))
+		.select(ret_item.item_code, ret_item.qty, ret_item.rate)
 		.where(
 			(ret_si.return_against == original_invoice_name)
 			& (ret_si.docstatus == 1)
 			& (ret_si.is_return == 1)
 		)
-		.groupby(ret_item.item_code)
 	).run(as_dict=True)
 
-	# Subtract returned quantities
-	for row in returned_qty_data:
+	# Subtract already-returned quantities and value
+	for row in returned_data:
+		returned_qty = abs(flt(row.qty))
 		if row.item_code in original_item_qty:
-			original_item_qty[row.item_code] -= flt(row.returned_qty)
+			original_item_qty[row.item_code] -= returned_qty
+		if row.item_code in original_item_value:
+			original_item_value[row.item_code] -= returned_qty * flt(row.rate)
 
 	# Validate new return items
+	requested_value = 0
 	for item in return_items:
 		item_code = item.get("item_code")
 		return_qty = abs(flt(item.get("qty", 0)))
@@ -686,6 +714,17 @@ def validate_return_items(original_invoice_name, return_items, doctype="Sales In
 					item_code
 				),
 			}
+		requested_value += return_qty * abs(flt(item.get("rate", 0)))
+
+	remaining_value = sum(original_item_value.values())
+	if requested_value > remaining_value + 0.01:
+		return {
+			"valid": False,
+			"message": _("You are trying to return more value ({0}) than remains on this invoice ({1}).").format(
+				frappe.format_value(requested_value, {"fieldtype": "Currency"}),
+				frappe.format_value(remaining_value, {"fieldtype": "Currency"}),
+			),
+		}
 
 	return {"valid": True}
 
@@ -905,7 +944,7 @@ def update_invoice(data):
 		# Set invoice flags BEFORE calculations
 		if doctype == "Sales Invoice":
 			invoice_doc.is_pos = 1
-			invoice_doc.update_stock = 1
+			invoice_doc.update_stock = 0 if _is_amount_only_return(data, pos_profile) else 1
 			if pos_profile_doc and pos_profile_doc.warehouse:
 				invoice_doc.set_warehouse = pos_profile_doc.warehouse
 
@@ -1334,7 +1373,7 @@ def submit_invoice(invoice=None, data=None):
 
 		# Ensure update_stock is set for Sales Invoice
 		if doctype == "Sales Invoice":
-			invoice_doc.update_stock = 1
+			invoice_doc.update_stock = 0 if _is_amount_only_return(invoice, pos_profile) else 1
 
 		# For return invoices, set update_outstanding_for_self = 0
 		# This ensures the GL entry's against_voucher points to the original invoice,
@@ -1395,8 +1434,9 @@ def submit_invoice(invoice=None, data=None):
 						message=f"Coupon: {coupon_code}, Error: {e!s}",
 					)
 
-		# Auto-set batch numbers for returns
-		_auto_set_return_batches(invoice_doc)
+		# Auto-set batch numbers for returns (skip for money-only credit notes: no stock moves)
+		if cint(invoice_doc.get("update_stock")):
+			_auto_set_return_batches(invoice_doc)
 
 		# Handle write-off amount if provided
 		write_off_amount = flt(data.get("write_off_amount") or invoice.get("write_off_amount") or 0)
@@ -1506,7 +1546,8 @@ def submit_invoice(invoice=None, data=None):
 
 				try:
 					credit_return_to_wallet(
-						return_invoice=invoice_doc.name, amount=abs(flt(invoice_doc.grand_total))
+						return_invoice=invoice_doc.name,
+						amount=abs(flt(invoice_doc.grand_total)) - abs(flt(invoice_doc.paid_amount)),
 					)
 				except Exception as wallet_credit_error:
 					frappe.log_error(
@@ -2530,6 +2571,12 @@ def prepare_return_invoice(invoice_name, pos_opening_shift=None):
 	# Check if all items have been fully returned
 	if not return_dict["items"]:
 		frappe.throw(_("All items from this invoice have already been returned"))
+
+	# Remaining returnable value across all lines (amount-only return cap)
+	return_dict["_original_invoice"]["remaining_value"] = flt(
+		sum(flt(item["remaining_qty"]) * flt(item["rate_with_tax"]) for item in return_dict["items"]),
+		precision,
+	)
 
 	return return_dict
 
