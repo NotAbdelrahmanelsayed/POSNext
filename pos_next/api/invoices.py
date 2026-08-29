@@ -2460,6 +2460,21 @@ def prepare_return_invoice(invoice_name, pos_opening_shift=None):
 
 	returned_qty_map = {row["key_field"]: flt(row["returned_qty"]) for row in returned_qty_results}
 
+	# True original quantities per line, keyed the same way as returned_qty_map.
+	# make_sales_return() pre-fills item.qty with ERPNext's own suggested return
+	# qty, which is *already* the remaining amount (original minus prior returns) —
+	# using it as "original_qty" below would double-subtract prior returns.
+	orig_item = frappe.qb.DocType("Sales Invoice Item")
+	original_qty_rows = (
+		frappe.qb.from_(orig_item)
+		.select(orig_item.name, orig_item.item_code, orig_item.qty)
+		.where(orig_item.parent == invoice_name)
+	).run(as_dict=True)
+	original_qty_map = {row["name"]: flt(row["qty"]) for row in original_qty_rows}
+	for row in original_qty_rows:
+		original_qty_map.setdefault(row["item_code"], 0)
+		original_qty_map[row["item_code"]] += flt(row["qty"])
+
 	# Convert to dict and update items with remaining quantities
 	return_dict = return_doc.as_dict()
 
@@ -2521,7 +2536,7 @@ def prepare_return_invoice(invoice_name, pos_opening_shift=None):
 	def process_return_item(item):
 		"""Process single item for return, returns None if not returnable."""
 		item_ref = item.get("sales_invoice_item") or item.get("item_code")
-		original_qty = abs(flt(item.get("qty", 0)))
+		original_qty = abs(original_qty_map.get(item_ref, flt(item.get("qty", 0))))
 		remaining_qty = original_qty - returned_qty_map.get(item_ref, 0)
 
 		if remaining_qty <= 0:
