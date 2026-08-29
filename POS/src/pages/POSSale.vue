@@ -767,6 +767,7 @@
 				:pos-profile="shiftStore.profileName"
 				:currency="shiftStore.profileCurrency"
 				@print-invoice="handlePrintInvoice"
+				@invoice-transferred="loadInvoiceHistoryData"
 			/>
 
 			<!-- Clear Cart Confirmation Dialog -->

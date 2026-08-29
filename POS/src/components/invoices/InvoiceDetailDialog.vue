@@ -465,7 +465,26 @@
 				<Button variant="subtle" @click="show = false">
 					{{ __("Close") }}
 				</Button>
-				<Button @click="handlePrint">
+				<div class="flex items-center gap-2">
+					<Button
+						v-if="invoiceData && !invoiceData.is_return"
+						:disabled="isOffline"
+						:title="__('Move to another customer')"
+						@click="showTransferDialog = true"
+					>
+						<template #prefix>
+							<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M8 7h12m0 0l-4-4m4 4l-4 4M16 17H4m0 0l4 4m-4-4l4-4"
+								/>
+							</svg>
+						</template>
+						{{ __("Move") }}
+					</Button>
+					<Button @click="handlePrint">
 					<template #prefix>
 						<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 							<path
@@ -477,10 +496,19 @@
 						</svg>
 					</template>
 					{{ __("Print") }}
-				</Button>
+					</Button>
+				</div>
 			</div>
 		</template>
 	</Dialog>
+
+	<!-- Move Invoice to Another Customer -->
+	<TransferInvoiceDialog
+		v-model="showTransferDialog"
+		:invoice="invoiceData"
+		:currency="currency"
+		@transferred="handleInvoiceTransferred"
+	/>
 </template>
 
 <script setup>
@@ -492,6 +520,8 @@ import { hydrateLocalOnlyInvoice, isLocalOnlyInvoiceName } from "@/utils/printIn
 import { Button, Dialog, call } from "frappe-ui";
 import { ref, watch, nextTick, computed } from "vue";
 import { useDialogSubmit } from "@/composables/useDialogSubmit";
+import { useOfflineStatus } from "@/composables/useOfflineStatus";
+import TransferInvoiceDialog from "@/components/invoices/TransferInvoiceDialog.vue";
 
 const log = logger.create("InvoiceDetailDialog");
 const { formatDate, formatTime } = useFormatters();
@@ -510,7 +540,10 @@ function formatCurrency(amount) {
 	return formatCurrencyUtil(Number.parseFloat(amount || 0), props.currency);
 }
 
-const emit = defineEmits(["update:modelValue", "print-invoice"]);
+const emit = defineEmits(["update:modelValue", "print-invoice", "invoice-transferred"]);
+
+const { isOffline } = useOfflineStatus();
+const showTransferDialog = ref(false);
 
 const show = ref(props.modelValue);
 const loading = ref(false);
@@ -616,6 +649,13 @@ async function loadInvoiceDetails() {
 	} finally {
 		loading.value = false;
 	}
+}
+
+function handleInvoiceTransferred(result) {
+	// This invoice is now cancelled - close the detail view and let the parent
+	// refresh its list against the replacement invoice.
+	emit("invoice-transferred", result);
+	show.value = false;
 }
 
 function handlePrint() {

@@ -399,6 +399,15 @@
 													/>
 													{{ __("Add Payment") }}
 												</button>
+												<button
+													@click="openTransferDialog(invoice)"
+													:disabled="isOffline()"
+													:title="__('Move to another customer')"
+													class="px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+												>
+													<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4M16 17H4m0 0l4 4m-4-4l4-4"/></svg>
+													{{ __("Move") }}
+												</button>
 											</div>
 										</div>
 
@@ -759,6 +768,16 @@
 												</svg>
 												<span>{{ __("Print") }}</span>
 											</button>
+											<button
+												v-if="!invoice.is_return"
+												@click="openTransferDialog(invoice)"
+												:disabled="isOffline()"
+												class="px-3 py-2 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+												:title="__('Move to another customer')"
+											>
+												<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4M16 17H4m0 0l4 4m-4-4l4-4"/></svg>
+												<span>{{ __("Move") }}</span>
+											</button>
 										</div>
 									</div>
 								</div>
@@ -1021,11 +1040,21 @@
 		:allow-partial-payment="true"
 		@payment-completed="handlePaymentCompleted"
 	/>
+
+	<!-- Move Invoice to Another Customer -->
+	<TransferInvoiceDialog
+		v-model="showTransferDialog"
+		:invoice="invoiceToTransfer"
+		:pos-profile="posProfile"
+		:currency="currency"
+		@transferred="handleInvoiceTransferred"
+	/>
 </template>
 
 <script setup>
 import InvoiceFilters from "@/components/invoices/InvoiceFilters.vue";
 import PaymentDialog from "@/components/sale/PaymentDialog.vue";
+import TransferInvoiceDialog from "@/components/invoices/TransferInvoiceDialog.vue";
 import { useInvoiceFilters } from "@/composables/useInvoiceFilters";
 import { useInvoiceFiltersStore } from "@/stores/invoiceFilters";
 import { DEFAULT_CURRENCY, formatCurrency as formatCurrencyUtil } from "@/utils/currency";
@@ -1097,6 +1126,8 @@ const unpaidSummary = ref({
 });
 const selectedInvoice = ref(null);
 const showPaymentDialog = ref(false);
+const showTransferDialog = ref(false);
+const invoiceToTransfer = ref(null);
 
 // Filtered unpaid invoices based on payment amounts
 const filteredUnpaidInvoices = computed(() => {
@@ -1424,6 +1455,20 @@ async function handlePaymentCompleted(paymentData) {
 		console.error("Error adding payment:", error);
 		showError(error.message || __("Failed to add payment"));
 	}
+}
+
+function openTransferDialog(invoice) {
+	if (isOffline()) return;
+	invoiceToTransfer.value = invoice;
+	showTransferDialog.value = true;
+}
+
+async function handleInvoiceTransferred() {
+	// The moved invoice is cancelled and replaced, so every tab that lists it is
+	// now stale - refresh the partial tab locally and ask the parent for history.
+	invoiceToTransfer.value = null;
+	await Promise.all([loadUnpaidInvoices(), loadUnpaidSummary()]);
+	emit("refresh-history");
 }
 
 function formatCurrency(amount) {

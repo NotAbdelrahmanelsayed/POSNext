@@ -405,6 +405,19 @@
 												{{ __('Return') }}
 											</button>
 											<button
+												v-if="!invoice.is_return"
+												type="button"
+												@click.stop="openTransferModal(invoice)"
+												:disabled="isOffline()"
+												class="px-3 py-1.5 text-xs font-semibold bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+												:title="__('Move to another customer')"
+											>
+												<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4M16 17H4m0 0l4 4m-4-4l4-4"/>
+												</svg>
+												{{ __('Move') }}
+											</button>
+											<button
 												type="button"
 												@click.stop="$emit('print-invoice', invoice)"
 												class="px-3 py-1.5 text-xs font-semibold bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-1"
@@ -614,11 +627,21 @@
 		:preselected-invoice="selectedInvoiceForReturn"
 		@return-created="handleReturnCreated"
 	/>
+
+	<!-- Move Invoice to Another Customer -->
+	<TransferInvoiceDialog
+		v-model="showTransferDialog"
+		:invoice="selectedInvoiceForTransfer"
+		:pos-profile="posProfile"
+		:currency="currency"
+		@transferred="handleInvoiceTransferred"
+	/>
 </template>
 
 <script setup>
 import PaymentDialog from "@/components/sale/PaymentDialog.vue"
 import ReturnInvoiceDialog from "@/components/sale/ReturnInvoiceDialog.vue"
+import TransferInvoiceDialog from "@/components/invoices/TransferInvoiceDialog.vue"
 import { useDialogSubmit } from "@/composables/useDialogSubmit"
 import { useToast } from "@/composables/useToast"
 import { useShift } from "@/composables/useShift"
@@ -685,6 +708,8 @@ const showSinglePayment = ref(false)
 const selectedSingleInvoice = ref(null)
 const showReturnDialog = ref(false)
 const selectedInvoiceForReturn = ref(null)
+const showTransferDialog = ref(false)
+const selectedInvoiceForTransfer = ref(null)
 
 const customerName = computed(() => {
 	if (typeof props.customer === "object" && props.customer) {
@@ -984,6 +1009,20 @@ function openReturnModal(invoice) {
 	if (isOffline() || !canCreateReturn(invoice)) return
 	selectedInvoiceForReturn.value = invoice
 	showReturnDialog.value = true
+}
+
+function openTransferModal(invoice) {
+	if (isOffline() || invoice.is_return) return
+	selectedInvoiceForTransfer.value = invoice
+	showTransferDialog.value = true
+}
+
+async function handleInvoiceTransferred() {
+	// The invoice now belongs to someone else - it must disappear from this
+	// customer's statement, and their balance drops by the moved amount.
+	statement.value = null
+	await loadStatement()
+	emit("payment-completed")
 }
 
 async function handleReturnCreated() {
