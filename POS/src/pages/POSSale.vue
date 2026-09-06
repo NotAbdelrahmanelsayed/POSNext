@@ -1371,7 +1371,9 @@ onMounted(async () => {
 			/^Digit[1-5]$/.test(event.code);
 		const isAltQ =
 			event.altKey && !event.ctrlKey && !event.metaKey && event.code === "KeyQ";
-		if (!isFunctionKey && !isAltDigit && !isAltQ && isInInput) return;
+		const isAltB =
+			event.altKey && !event.ctrlKey && !event.metaKey && event.code === "KeyB";
+		if (!isFunctionKey && !isAltDigit && !isAltQ && !isAltB && isInInput) return;
 
 		if (event.key === "F4") {
 			event.preventDefault();
@@ -1397,6 +1399,10 @@ onMounted(async () => {
 				cartStore.setPendingItem(lastItem, lastItem.quantity, "cart-edit");
 				uiStore.showItemSelectionDialog = true;
 			}
+		} else if (isAltB) {
+			event.preventDefault();
+			const isOn = settingsStore.toggleBuyingPrice();
+			showSuccess(isOn ? __("Cost display: ON") : __("Cost display: OFF"));
 		}
 	};
 	window.addEventListener("keydown", handleGlobalKeydown);

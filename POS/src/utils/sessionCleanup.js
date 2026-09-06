@@ -18,6 +18,7 @@ const USER_KEYS = [
 	"pos_frequent_customers",
 	"pos_customers_last_sync",
 	"pos_invoice_filters",
+	"pos_show_buying_price",
 ];
 
 /**

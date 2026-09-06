@@ -9,6 +9,7 @@ export function getShortcutGroups() {
 				{ keys: ["F8"], label: __("Search customer") },
 				{ keys: ["F9"], label: __("Proceed to payment") },
 				{ keys: ["Alt", "Q"], label: __("Edit last item quantity") },
+				{ keys: ["Alt", "B"], label: __("Show/hide item cost") },
 				{ keys: ["?"], label: __("Show shortcuts") },
 			],
 		},

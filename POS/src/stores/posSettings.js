@@ -160,9 +160,36 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 	const showBuyingPrice = computed(() =>
 		Boolean(settings.value.show_buying_price),
 	)
+
+	const BUYING_PRICE_KEY = "pos_show_buying_price"
+	function getStoredBuyingPriceOverride() {
+		try {
+			const stored = localStorage.getItem(BUYING_PRICE_KEY)
+			if (stored === "1") return true
+			if (stored === "0") return false
+			return null
+		} catch (error) {
+			return null
+		}
+	}
+	const buyingPriceOverride = ref(getStoredBuyingPriceOverride())
+
 	const canSeeBuyingPrice = computed(() =>
-		Boolean(settings.value.show_buying_price),
+		buyingPriceOverride.value !== null
+			? buyingPriceOverride.value
+			: Boolean(settings.value.show_buying_price),
 	)
+
+	function toggleBuyingPrice() {
+		const next = !canSeeBuyingPrice.value
+		buyingPriceOverride.value = next
+		try {
+			localStorage.setItem(BUYING_PRICE_KEY, next ? "1" : "0")
+		} catch (error) {
+			// localStorage unavailable (e.g. private mode) - override stays in-memory
+		}
+		return next
+	}
 	const cartLifo = computed(() => Boolean(settings.value.cart_lifo))
 
 	// Computed - Operations
@@ -483,6 +510,8 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 		showVariantsAsItems,
 		showBuyingPrice,
 		canSeeBuyingPrice,
+		buyingPriceOverride,
+		toggleBuyingPrice,
 		cartLifo,
 
 		// Computed - Operations
