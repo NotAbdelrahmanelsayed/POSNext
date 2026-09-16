@@ -1316,6 +1316,7 @@ def submit_invoice(invoice=None, data=None):
 
 	try:
 		invoice_name = invoice.get("name")
+		freshly_created = False
 
 		# Get or create invoice
 		if not invoice_name or not frappe.db.exists(doctype, invoice_name):
@@ -1326,6 +1327,7 @@ def submit_invoice(invoice=None, data=None):
 			if not invoice_name:
 				frappe.throw(_("Failed to get invoice name from draft"))
 			invoice_doc = frappe.get_doc(doctype, invoice_name)
+			freshly_created = True
 		else:
 			invoice_doc = frappe.get_doc(doctype, invoice_name)
 			invoice_doc.update(invoice)
@@ -1345,8 +1347,9 @@ def submit_invoice(invoice=None, data=None):
 		if invoice_doc.get("is_return") and invoice_doc.get("return_against"):
 			invoice_doc.update_outstanding_for_self = 0
 
-		# Copy accounting dimensions from POS Profile if not already set
-		if pos_profile and not invoice_doc.get("branch"):
+		# update_invoice already applied branch and payment account setup when
+		# this request created the draft. Avoid doing those lookups twice.
+		if not freshly_created and pos_profile and not invoice_doc.get("branch"):
 			try:
 				pos_profile_doc = frappe.get_cached_doc("POS Profile", pos_profile)
 				if hasattr(pos_profile_doc, "branch") and pos_profile_doc.branch:
@@ -1361,8 +1364,7 @@ def submit_invoice(invoice=None, data=None):
 					f"Failed to set branch from POS Profile {pos_profile}: {e}", "POS Profile Branch"
 				)
 
-		# Set accounts for all payment methods before saving
-		if doctype == "Sales Invoice" and hasattr(invoice_doc, "payments"):
+		if not freshly_created and doctype == "Sales Invoice" and hasattr(invoice_doc, "payments"):
 			_set_payment_accounts(invoice_doc.payments, invoice_doc.company)
 
 		# Handle sales team (multiple sales persons)

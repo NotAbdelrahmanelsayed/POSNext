@@ -2265,17 +2265,12 @@ async function handlePaymentCompleted(paymentData) {
 			return;
 		}
 
-		cartStore.payments = [];
-		if (paymentData.payments && Array.isArray(paymentData.payments)) {
-			paymentData.payments.forEach((p) => {
-				cartStore.payments.push({
-					...p,
-					mode_of_payment: p.mode_of_payment,
-					amount: p.amount,
-					type: p.type,
-				});
-			});
-		}
+		cartStore.payments = (paymentData.payments || []).map((p) => ({
+			...p,
+			mode_of_payment: p.mode_of_payment,
+			amount: p.amount,
+			type: p.type,
+		}));
 
 		// Store sales team data if provided
 		if (paymentData.sales_team && Array.isArray(paymentData.sales_team)) {
@@ -2458,10 +2453,11 @@ async function handlePaymentCompleted(paymentData) {
 					draftsStore.deleteDraft(draftIdToDelete);
 				}
 
-				// Refresh stock - Direct API (50-200ms), no Socket.IO lag!
-				await stockStore.refresh(soldItemCodes, shiftStore.profileWarehouse);
+				// Do not keep the cashier waiting for cache refreshes after posting.
+				stockStore.refresh(soldItemCodes, shiftStore.profileWarehouse).catch((err) =>
+					log.debug("Background stock refresh failed:", err)
+				);
 
-				// Refresh invoice history cache in background (non-blocking)
 				loadInvoiceHistoryData().catch((err) =>
 					log.debug("Background invoice cache refresh failed:", err)
 				);
