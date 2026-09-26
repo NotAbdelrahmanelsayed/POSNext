@@ -1,3 +1,4 @@
+import { call } from "@/utils/apiWrapper"
 import { logger } from "@/utils/logger"
 import {
 	DEFAULT_PRINT_FORMAT,
@@ -35,8 +36,24 @@ async function resolveInvoiceSource(invoiceData) {
 		}
 	}
 
+	const doctype = invoice.doctype || "Sales Invoice"
+	// Lists like the customer statement omit pos_profile; without it the
+	// profile's print format would silently fall back to the default.
+	let posProfile = invoice.pos_profile
+	if (!posProfile) {
+		try {
+			posProfile = await call("frappe.client.get_value", {
+				doctype,
+				filters: { name: invoice.name },
+				fieldname: "pos_profile",
+			}).then((r) => (r?.message || r)?.pos_profile)
+		} catch (err) {
+			log.warn("Could not fetch invoice POS Profile:", err)
+		}
+	}
+
 	const settings = await resolvePrintSettings(
-		invoice.pos_profile,
+		posProfile,
 		invoice.print_format,
 		null,
 	)
@@ -44,7 +61,7 @@ async function resolveInvoiceSource(invoiceData) {
 	if (await isRawPrintFormat(format)) format = DEFAULT_PRINT_FORMAT
 
 	const params = new URLSearchParams({
-		doctype: invoice.doctype || "Sales Invoice",
+		doctype,
 		name: invoice.name,
 		format,
 		no_letterhead: settings.letterhead ? 0 : 1,
