@@ -414,6 +414,22 @@
 												</svg>
 												{{ __('Print') }}
 											</button>
+											<button
+												type="button"
+												@click.stop="copyInvoiceAsImage(invoice)"
+												:disabled="isOffline() || copyingInvoice === invoice.name"
+												class="px-3 py-1.5 text-xs font-semibold bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+												:title="__('Copy as Image')"
+											>
+												<svg v-if="copyingInvoice === invoice.name" class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+													<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+													<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
+												</svg>
+												<svg v-else class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+												</svg>
+												{{ __('Copy Image') }}
+											</button>
 										</div>
 									</div>
 								</div>
@@ -628,6 +644,7 @@ import {
 } from "@/utils/currency"
 import { isOffline } from "@/utils/offline/offlineState"
 import { canCreateReturn } from "@/utils/invoice"
+import { copyInvoiceImage } from "@/utils/invoiceImage"
 import { printCustomerStatement } from "@/utils/printCustomerStatement"
 import { useWhatsAppStatement } from "@/composables/useWhatsAppStatement"
 import { call, LoadingIndicator } from "frappe-ui"
@@ -657,7 +674,7 @@ const emit = defineEmits([
 	"payment-completed",
 ])
 
-const { showSuccess, showError } = useToast()
+const { showSuccess, showError, showInfo } = useToast()
 const { currentShift } = useShift()
 const {
 	sharingCustomer,
@@ -978,6 +995,27 @@ function openSingleInvoicePayment(invoice) {
 	if (showLumpSumPayment.value) return
 	selectedSingleInvoice.value = invoice
 	showSinglePayment.value = true
+}
+
+// Name of the invoice whose image is being rendered
+const copyingInvoice = ref(null)
+
+async function copyInvoiceAsImage(invoice) {
+	if (copyingInvoice.value) return
+	copyingInvoice.value = invoice.name
+	try {
+		const { method } = await copyInvoiceImage(invoice)
+		if (method === "clipboard") {
+			showSuccess(__("Invoice image copied"))
+		} else {
+			showInfo(__("Clipboard unavailable, invoice image downloaded"))
+		}
+	} catch (error) {
+		console.error("Error copying invoice image:", error)
+		showError(error?.message || __("Failed to create invoice image"))
+	} finally {
+		copyingInvoice.value = null
+	}
 }
 
 function openReturnModal(invoice) {
