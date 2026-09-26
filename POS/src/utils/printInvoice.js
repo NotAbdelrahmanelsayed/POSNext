@@ -10,7 +10,7 @@ import {
 
 const log = logger.create("PrintInvoice")
 
-const DEFAULT_PRINT_FORMAT = "POS Next Receipt"
+export const DEFAULT_PRINT_FORMAT = "POS Next Receipt"
 const printFormatMetaCache = new Map()
 
 // ============================================================================
@@ -330,7 +330,7 @@ export function buildReceiptHTML(invoiceData) {
 			</div>`
 }
 
-function buildReceiptDocumentHTML(
+export function buildReceiptDocumentHTML(
 	invoiceData,
 	{ includeControls = false } = {},
 ) {
@@ -364,7 +364,11 @@ function buildReceiptDocumentHTML(
  * Resolve print format & letterhead from a POS Profile.
  * Returns defaults when the profile lookup fails so callers always get a value.
  */
-async function resolvePrintSettings(posProfile, printFormat, letterhead) {
+export async function resolvePrintSettings(
+	posProfile,
+	printFormat,
+	letterhead,
+) {
 	if (printFormat) return { printFormat, letterhead }
 	if (posProfile && typeof posProfile === "object") {
 		return {
@@ -418,7 +422,7 @@ async function getPrintFormatMeta(printFormat) {
 	}
 }
 
-async function isRawPrintFormat(printFormat) {
+export async function isRawPrintFormat(printFormat) {
 	const meta = await getPrintFormatMeta(printFormat)
 	if (meta) return Boolean(Number.parseInt(meta.raw_printing ?? 0, 10))
 

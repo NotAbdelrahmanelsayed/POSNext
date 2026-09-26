@@ -184,6 +184,37 @@
 											/>
 										</svg>
 									</button>
+									<button
+										@click="copyAsImage(invoice)"
+										:disabled="copyingInvoice === invoice.name"
+										class="p-1.5 hover:bg-blue-50 rounded transition-colors disabled:cursor-wait"
+										:title="__('Copy as Image')"
+										:aria-label="__('Copy as Image')"
+									>
+										<svg
+											v-if="copyingInvoice === invoice.name"
+											class="w-4 h-4 text-blue-600 animate-spin"
+											fill="none"
+											viewBox="0 0 24 24"
+										>
+											<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+											<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+										</svg>
+										<svg
+											v-else
+											class="w-4 h-4 text-blue-600"
+											fill="none"
+											stroke="currentColor"
+											viewBox="0 0 24 24"
+										>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+											/>
+										</svg>
+									</button>
 								</div>
 							</div>
 						</div>
@@ -221,11 +252,12 @@ import { useToast } from "@/composables/useToast";
 import { useFormatters } from "@/composables/useFormatters";
 import { DEFAULT_CURRENCY, formatCurrency as formatCurrencyUtil } from "@/utils/currency";
 import { canCreateReturn as isReturnEligible, getInvoiceStatusColor } from "@/utils/invoice";
+import { copyInvoiceImage } from "@/utils/invoiceImage";
 import { Button, Dialog, Input, createResource } from "frappe-ui";
 import { onBeforeUnmount, ref, watch } from "vue";
 import ReturnInvoiceDialog from "./ReturnInvoiceDialog.vue";
 
-const { showError } = useToast();
+const { showError, showSuccess, showInfo } = useToast();
 const { formatDate, formatTime } = useFormatters();
 
 const props = defineProps({
@@ -256,6 +288,9 @@ const searchTerm = ref("");
 const page = ref(0);
 const pageSize = 20;
 const hasMore = ref(true);
+
+// Name of the invoice whose image is being rendered
+const copyingInvoice = ref(null);
 
 // Return dialog state
 const showReturnDialog = ref(false);
@@ -393,6 +428,24 @@ function viewInvoice(invoice) {
 
 function printInvoice(invoice) {
 	emit("print-invoice", invoice);
+}
+
+async function copyAsImage(invoice) {
+	if (copyingInvoice.value) return;
+	copyingInvoice.value = invoice.name;
+	try {
+		const { method } = await copyInvoiceImage(invoice);
+		if (method === "clipboard") {
+			showSuccess(__("Invoice image copied"));
+		} else {
+			showInfo(__("Clipboard unavailable, invoice image downloaded"));
+		}
+	} catch (error) {
+		console.error("Error copying invoice image:", error);
+		showError(error?.message || __("Failed to create invoice image"));
+	} finally {
+		copyingInvoice.value = null;
+	}
 }
 
 function canCreateReturn(invoice) {
