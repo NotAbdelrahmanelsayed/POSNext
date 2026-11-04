@@ -158,6 +158,27 @@ def update_item_buying_price(item_code: str, buying_price: float, pos_profile: s
 	return _item_price_info(item_code, buying_price_list, selling_price_list)
 
 
+@frappe.whitelist(methods=["POST"])
+def update_item_selling_price(item_code: str, selling_price: float, pos_profile: str | None = None) -> dict:
+	"""Set the item's rate on the profile's selling price list from the cart's item edit dialog.
+
+	Saves the edited price to the item right away instead of waiting for a
+	checkout. Same write path and permission checks as `update_item_buying_price`
+	and `save_product`: profile access is validated, and `_upsert_item_price`
+	enforces Item Price write/create and is a no-op when the rate is unchanged.
+	"""
+	rate = flt(selling_price)
+	if rate <= 0:
+		frappe.throw(_("Selling price must be greater than zero"))
+	if not frappe.db.exists("Item", item_code):
+		frappe.throw(_("Item {0} not found").format(item_code))
+	selling_price_list = _profile_selling_price_list(pos_profile)
+	if not selling_price_list:
+		frappe.throw(_("POS Profile has no selling price list"))
+	_upsert_item_price(item_code, selling_price_list, rate, "selling")
+	return _item_price_info(item_code, _get_buying_price_list(), selling_price_list)
+
+
 @frappe.whitelist()
 def get_product_image_settings() -> dict:
 	"""Report the site's own upload limits so the client matches the server.

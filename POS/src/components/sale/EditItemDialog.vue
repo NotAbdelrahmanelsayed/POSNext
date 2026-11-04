@@ -534,6 +534,7 @@ import { computed, ref, watch } from "vue";
 import SelectInput from "@/components/common/SelectInput.vue";
 import { useDialogSubmit } from "@/composables/useDialogSubmit";
 import { call } from "@/utils/apiWrapper";
+import { isOffline } from "@/utils/offline";
 
 const { showSuccess, showError, showWarning } = useToast();
 const settingsStore = usePOSSettingsStore();
@@ -648,6 +649,19 @@ async function saveBuyingPrice(itemCode, rate) {
 		showSuccess(__("Buying price updated"));
 	} catch (error) {
 		showError(error?.message || __("Failed to update buying price"));
+	}
+}
+
+async function saveSellingPrice(itemCode, rate) {
+	try {
+		await call("pos_next.api.product_management.update_item_selling_price", {
+			item_code: itemCode,
+			selling_price: rate,
+			pos_profile: settingsStore.settings.pos_profile || null,
+		});
+		showSuccess(__("New price saved"));
+	} catch (error) {
+		showError(error?.message || __("Failed to update selling price"));
 	}
 }
 
@@ -1010,6 +1024,13 @@ function updateItem() {
 				return;
 			}
 		}
+	}
+
+	// A manually edited rate is saved to the item's selling price list right
+	// away, no checkout needed. Online only — offline keeps today's behaviour
+	// (the edited rate stays on the cart line, like every other field).
+	if (settingsStore.allowUserToEditRate && isRateManuallyEdited && !isOffline()) {
+		saveSellingPrice(localItem.value.item_code, localRate.value);
 	}
 
 	const buyingPriceChanged =

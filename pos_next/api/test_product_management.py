@@ -9,10 +9,13 @@ import frappe
 
 from pos_next.api.product_management import (
 	_save_uom_conversions,
+	_upsert_item_price,
 	_validate_pos_profile_access,
 	get_item_groups,
 	get_product_image_settings,
 	save_product,
+	update_item_buying_price,
+	update_item_selling_price,
 	update_product_image,
 )
 
@@ -274,3 +277,132 @@ class TestProductImageSettings(unittest.TestCase):
 		mock_settings.side_effect = self._settings("", max_mb=7)
 
 		self.assertEqual(get_product_image_settings()["max_file_size"], 7 * 1024 * 1024)
+
+
+class TestUpdateItemSellingPrice(unittest.TestCase):
+	"""The cart item edit dialog saves a manually edited rate to the item's
+	selling price list right away, so the checks here are the only gate."""
+
+	@patch("pos_next.api.product_management._profile_selling_price_list", return_value="Std Selling")
+	@patch("pos_next.api.product_management._get_buying_price_list", return_value=None)
+	@patch("pos_next.api.product_management._get_price_rows", return_value={})
+	@patch("pos_next.api.product_management._get_valuation_rate", return_value=0.0)
+	@patch("pos_next.api.product_management._upsert_item_price")
+	@patch("pos_next.api.product_management.frappe.db", new_callable=MagicMock)
+	def test_saves_to_the_profile_selling_price_list(self, mock_db, mock_upsert, *_mocks):
+		mock_db.exists.return_value = "The Item"
+
+		result = update_item_selling_price("The Item", 25.0, PROFILE)
+
+		mock_upsert.assert_called_once_with("The Item", "Std Selling", 25.0, "selling")
+		self.assertEqual(result["buying_price"], 0.0)  # no buying list on this site
+
+	@patch("pos_next.api.product_management._profile_selling_price_list", return_value="Std Selling")
+	@patch("pos_next.api.product_management.frappe.db", new_callable=MagicMock)
+	def test_rejects_zero_and_negative_rates(self, mock_db, *_mocks):
+		mock_db.exists.return_value = "The Item"
+
+		for rate in (0, -5):
+			with self.assertRaises(frappe.ValidationError):
+				update_item_selling_price("The Item", rate, PROFILE)
+
+	@patch("pos_next.api.product_management.frappe.db", new_callable=MagicMock)
+	def test_rejects_unknown_item(self, mock_db):
+		mock_db.exists.return_value = None
+
+		with self.assertRaises(frappe.ValidationError):
+			update_item_selling_price("Ghost Item", 25.0, PROFILE)
+
+	@patch("pos_next.api.product_management._profile_selling_price_list", return_value=None)
+	@patch("pos_next.api.product_management.frappe.db", new_callable=MagicMock)
+	def test_rejects_profile_without_a_selling_price_list(self, mock_db, _mock_profile_list):
+		mock_db.exists.return_value = "The Item"
+
+		with self.assertRaises(frappe.ValidationError):
+			update_item_selling_price("The Item", 25.0, PROFILE)
+
+
+class TestUpdateItemBuyingPrice(unittest.TestCase):
+	@patch("pos_next.api.product_management._profile_selling_price_list", return_value="Std Selling")
+	@patch("pos_next.api.product_management._get_buying_price_list", return_value="Std Buying")
+	@patch("pos_next.api.product_management._get_price_rows", return_value={})
+	@patch("pos_next.api.product_management._get_valuation_rate", return_value=0.0)
+	@patch("pos_next.api.product_management._upsert_item_price")
+	@patch("pos_next.api.product_management.frappe.db", new_callable=MagicMock)
+	def test_saves_to_the_site_buying_price_list(self, mock_db, mock_upsert, *_mocks):
+		mock_db.exists.return_value = "The Item"
+
+		update_item_buying_price("The Item", 18.0, PROFILE)
+
+		mock_upsert.assert_called_once_with("The Item", "Std Buying", 18.0, "buying")
+
+	@patch("pos_next.api.product_management._get_buying_price_list", return_value=None)
+	def test_requires_the_site_opt_in(self, _mock_buying_list):
+		with self.assertRaises(frappe.ValidationError):
+			update_item_buying_price("The Item", 18.0, PROFILE)
+
+	@patch("pos_next.api.product_management._get_buying_price_list", return_value="Std Buying")
+	@patch("pos_next.api.product_management.frappe.db", new_callable=MagicMock)
+	def test_rejects_negative_rates(self, mock_db, _mock_buying_list):
+		mock_db.exists.return_value = "The Item"
+
+		with self.assertRaises(frappe.ValidationError):
+			update_item_buying_price("The Item", -1, PROFILE)
+
+
+class TestUpsertItemPrice(unittest.TestCase):
+	"""An unchanged rate must not touch the row: the modified date is what the
+	dialog shows as "last price change", so re-saving the same price would
+	falsely look like a change."""
+
+	@patch("pos_next.api.product_management.frappe.get_doc")
+	@patch("pos_next.api.product_management.frappe.db", new_callable=MagicMock)
+	def test_same_rate_is_a_no_op(self, mock_db, mock_get_doc):
+		mock_db.get_value.return_value = "existing-row"
+		existing = MagicMock()
+		existing.price_list_rate = 25.0
+		mock_get_doc.return_value = existing
+
+		_upsert_item_price("The Item", "Std Selling", 25.0, "selling")
+
+		existing.save.assert_not_called()
+
+	@patch("pos_next.api.product_management.frappe.has_permission", return_value=True)
+	@patch("pos_next.api.product_management.frappe.get_doc")
+	@patch("pos_next.api.product_management.frappe.db", new_callable=MagicMock)
+	def test_changed_rate_updates_with_write_permission(self, mock_db, mock_get_doc, _mock_perm):
+		mock_db.get_value.return_value = "existing-row"
+		existing = MagicMock()
+		existing.price_list_rate = 25.0
+		mock_get_doc.return_value = existing
+
+		_upsert_item_price("The Item", "Std Selling", 30.0, "selling")
+
+		self.assertEqual(existing.price_list_rate, 30.0)
+		existing.save.assert_called_once()
+
+	@patch("pos_next.api.product_management.frappe.has_permission", return_value=False)
+	@patch("pos_next.api.product_management.frappe.get_doc")
+	@patch("pos_next.api.product_management.frappe.db", new_callable=MagicMock)
+	def test_changed_rate_without_write_permission_is_rejected(self, mock_db, mock_get_doc, _mock_perm):
+		mock_db.get_value.return_value = "existing-row"
+		existing = MagicMock()
+		existing.price_list_rate = 25.0
+		mock_get_doc.return_value = existing
+
+		with self.assertRaises(frappe.ValidationError):
+			_upsert_item_price("The Item", "Std Selling", 30.0, "selling")
+
+		existing.save.assert_not_called()
+
+	@patch("pos_next.api.product_management.frappe.new_doc")
+	@patch("pos_next.api.product_management.frappe.has_permission", return_value=True)
+	@patch("pos_next.api.product_management.frappe.db", new_callable=MagicMock)
+	def test_new_row_is_created_with_create_permission(self, mock_db, _mock_perm, mock_new_doc):
+		mock_db.get_value.return_value = None
+		doc = MagicMock()
+		mock_new_doc.return_value = doc
+
+		_upsert_item_price("The Item", "Std Selling", 30.0, "selling")
+
+		doc.save.assert_called_once()

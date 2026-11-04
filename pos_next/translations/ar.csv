@@ -1815,3 +1815,8 @@ Points applied: {0}. Please pay remaining {1} with {2},تم خصم النقاط:
 "Failed to update buying price","فشل تحديث سعر الشراء",""
 "Buying price editing is not enabled on this site","تعديل سعر الشراء غير مفعّل على هذا الموقع",""
 "Valuation Rate","سعر التقييم",""
+"Item {0} not found","المنتج {0} غير موجود",""
+"Selling price must be greater than zero","يجب أن يكون سعر البيع أكبر من صفر",""
+"POS Profile has no selling price list","قائمة أسعار البيع غير محددة في ملف نقطة البيع",""
+"New price saved","تم حفظ السعر الجديد",""
+"Failed to update selling price","فشل تحديث سعر البيع",""
