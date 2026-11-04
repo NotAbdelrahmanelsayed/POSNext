@@ -570,6 +570,32 @@
 																	{{ validationErrors.price }}
 																</p>
 															</div>
+															<div v-if="formSettings.show_buying_price">
+																<FormControl
+																	type="number"
+																	:label="buyingPriceLabel"
+																	v-model="form.buying_price"
+																/>
+																<p
+																	v-if="validationErrors.buying_price"
+																	class="mt-1 text-xs text-red-600"
+																>
+																	{{ validationErrors.buying_price }}
+																</p>
+															</div>
+															<div v-if="formSettings.show_buying_price">
+																<span
+																	class="mb-1.5 block text-start text-sm font-medium text-gray-700"
+																>
+																	{{ __("Prices Last Changed") }}
+																</span>
+																<p
+																	class="flex h-7 items-center rounded bg-gray-50 px-2 text-sm text-gray-700"
+																	dir="auto"
+																>
+																	{{ priceUpdatedOnLabel }}
+																</p>
+															</div>
 														</div>
 													</div>
 												</section>
@@ -797,6 +823,8 @@ const selectedFile = ref(null);
 const fileInput = ref(null);
 const isDraggingImage = ref(false);
 const imageSettings = ref({ ...DEFAULT_IMAGE_SETTINGS });
+/** Optional fields the site has opted into (see get_product_form_settings). */
+const formSettings = ref({ show_buying_price: false });
 
 /** Drives the mobile master-detail swap: list, or form, never both. */
 const isFormOpen = computed(() => Boolean(selectedProduct.value) || isCreating.value);
@@ -827,6 +855,8 @@ const form = ref({
 	item_group: "",
 	stock_uom: "Nos",
 	price: 0,
+	buying_price: 0,
+	price_updated_on: null,
 	image: "",
 	disabled: false,
 	is_stock_item: true,
@@ -852,6 +882,21 @@ const priceLabel = computed(() => {
 	return props.currency ? __("Price ({0})", [props.currency]) : __("Price");
 });
 
+const buyingPriceLabel = computed(() => {
+	return props.currency ? __("Buying Price ({0})", [props.currency]) : __("Buying Price");
+});
+
+const priceUpdatedOnLabel = computed(() => {
+	const value = form.value.price_updated_on;
+	if (!value) return "—";
+	const date = new Date(String(value).replace(" ", "T"));
+	if (Number.isNaN(date.getTime())) return String(value);
+	return date.toLocaleString(document.documentElement.lang || undefined, {
+		dateStyle: "medium",
+		timeStyle: "short",
+	});
+});
+
 const hasActiveProductFilters = computed(() => {
 	return Boolean(searchQuery.value.trim()) || filterGroup.value !== "All";
 });
@@ -870,6 +915,7 @@ watch(
 			loadItemGroups();
 			loadUOMs();
 			loadImageSettings();
+			loadFormSettings();
 		}
 	}
 );
@@ -904,6 +950,10 @@ watch(
 	() => form.value.price,
 	() => clearValidationError("price")
 );
+watch(
+	() => form.value.buying_price,
+	() => clearValidationError("buying_price")
+);
 
 onBeforeUnmount(() => {
 	clearProductSearchTimer();
@@ -927,6 +977,8 @@ function resetForm() {
 		item_group: getDefaultItemGroup(),
 		stock_uom: "Nos",
 		price: 0,
+		buying_price: 0,
+		price_updated_on: null,
 		image: "",
 		disabled: false,
 		is_stock_item: true,
@@ -946,6 +998,8 @@ function selectProduct(product) {
 		item_group: product.item_group,
 		stock_uom: product.stock_uom,
 		price: product.price,
+		buying_price: product.buying_price || 0,
+		price_updated_on: product.price_updated_on || null,
 		image: product.image || "",
 		disabled: Boolean(product.disabled),
 		is_stock_item: Boolean(product.is_stock_item),
@@ -1032,6 +1086,8 @@ function buildSavedProduct(itemCode) {
 		item_group: form.value.item_group,
 		stock_uom: form.value.stock_uom,
 		price: Number(form.value.price || 0),
+		buying_price: Number(form.value.buying_price || 0),
+		price_updated_on: form.value.price_updated_on,
 		image: form.value.image || "",
 		disabled: form.value.disabled ? 1 : 0,
 		is_stock_item: form.value.is_stock_item ? 1 : 0,
@@ -1135,6 +1191,11 @@ function validateProductForm() {
 		errors.price = __("Price must be zero or greater");
 	}
 
+	const buyingPrice = Number(form.value.buying_price || 0);
+	if (formSettings.value.show_buying_price && (Number.isNaN(buyingPrice) || buyingPrice < 0)) {
+		errors.buying_price = __("Buying price must be zero or greater");
+	}
+
 	const invalidConversion = form.value.uom_conversions.find(
 		(row) => row.uom && Number(row.conversion_factor || 0) <= 0
 	);
@@ -1206,6 +1267,9 @@ async function saveProduct() {
 		});
 
 		const itemCode = result.item_code;
+		if ("price_updated_on" in result) {
+			form.value.price_updated_on = result.price_updated_on;
+		}
 
 		// 2. Upload image if selected
 		if (selectedFile.value) {
@@ -1312,6 +1376,15 @@ async function loadItemGroups() {
 		}
 	} catch (error) {
 		handleError(error, __("Failed to load item groups"));
+	}
+}
+
+async function loadFormSettings() {
+	try {
+		const data = await call("pos_next.api.product_management.get_product_form_settings");
+		if (data) formSettings.value = data;
+	} catch (error) {
+		console.warn("Failed to load product form settings", error);
 	}
 }
 

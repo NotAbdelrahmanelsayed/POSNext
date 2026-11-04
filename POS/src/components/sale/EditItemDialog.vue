@@ -216,6 +216,53 @@
 															{{ __("Locked (offer applied)") }}
 														</p>
 													</div>
+
+													<!-- Buying Price (site opt-in: pos_next_product_buying_price) -->
+													<div v-if="buyingInfo.enabled">
+														<label
+															class="block text-sm font-medium text-gray-700 mb-2 text-start"
+														>
+															{{ __("Buying Price") }}
+															<span
+																v-if="buyingInfo.buying_price_source === 'valuation_rate'"
+																class="ms-1 text-xs font-normal text-amber-600"
+																>({{ __("Valuation Rate") }})</span
+															>
+														</label>
+														<div class="relative h-7">
+															<span
+																class="absolute inset-y-0 start-0 ps-3 flex items-center text-gray-500 text-sm font-medium"
+															>
+																{{ currencySymbol }}
+															</span>
+															<input
+																v-model.number="localBuyingPrice"
+																type="number"
+																min="0"
+																step="0.01"
+																:readonly="!buyingInfo.can_edit"
+																:class="
+																	buyingInfo.can_edit
+																		? 'bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent'
+																		: 'bg-gray-50 cursor-not-allowed'
+																"
+																class="w-full h-7 border border-gray-300 rounded-lg ps-12 pe-3 text-sm font-semibold"
+															/>
+														</div>
+													</div>
+
+													<!-- Prices Last Changed -->
+													<div v-if="buyingInfo.enabled">
+														<span class="block text-sm font-medium text-gray-700 mb-2 text-start">{{
+															__("Prices Last Changed")
+														}}</span>
+														<p
+															class="h-7 flex items-center px-3 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-700"
+															dir="auto"
+														>
+															{{ priceUpdatedOnLabel }}
+														</p>
+													</div>
 												</div>
 
 												<!-- Right Column: UOM and Warehouse -->
@@ -486,6 +533,7 @@ import { Button, FeatherIcon, createResource } from "frappe-ui";
 import { computed, ref, watch } from "vue";
 import SelectInput from "@/components/common/SelectInput.vue";
 import { useDialogSubmit } from "@/composables/useDialogSubmit";
+import { call } from "@/utils/apiWrapper";
 
 const { showSuccess, showError, showWarning } = useToast();
 const settingsStore = usePOSSettingsStore();
@@ -525,6 +573,10 @@ const localSerials = ref([]); // List of serial numbers for this item
 const removedSerials = ref([]); // Track serials removed during this edit session
 const originalSerials = ref([]); // Original serials when dialog opened
 const originalPriceListRate = ref(0); // Original price_list_rate when dialog opened (for rate edit validation)
+// Buying price + last price change, shown only on sites that opt in
+const buyingInfo = ref({ enabled: false });
+const localBuyingPrice = ref(0);
+const buyingInfoRequestId = ref(0);
 
 const getItemDetailsResource = createResource({
 	url: "pos_next.api.items.get_item_details",
@@ -555,6 +607,49 @@ const hasPricingRules = computed(() => {
 const canEditRate = computed(() => {
 	return settingsStore.allowUserToEditRate && !hasPricingRules.value;
 });
+
+const priceUpdatedOnLabel = computed(() => {
+	const value = buyingInfo.value.price_updated_on;
+	if (!value) return "—";
+	const date = new Date(String(value).replace(" ", "T"));
+	if (Number.isNaN(date.getTime())) return String(value);
+	return date.toLocaleString(document.documentElement.lang || undefined, {
+		dateStyle: "medium",
+		timeStyle: "short",
+	});
+});
+
+async function loadBuyingInfo(itemCode) {
+	const requestId = ++buyingInfoRequestId.value;
+	buyingInfo.value = { enabled: false };
+	if (!itemCode) return;
+	try {
+		const data = await call("pos_next.api.product_management.get_item_buying_price", {
+			item_code: itemCode,
+			pos_profile: settingsStore.settings.pos_profile || null,
+			warehouse: localWarehouse.value || null,
+		});
+		if (requestId !== buyingInfoRequestId.value || !data?.enabled) return;
+		buyingInfo.value = data;
+		localBuyingPrice.value = Number(data.buying_price || 0);
+	} catch (error) {
+		// Optional field: offline or no permission just hides it.
+		console.warn("Failed to load buying price", error);
+	}
+}
+
+async function saveBuyingPrice(itemCode, rate) {
+	try {
+		await call("pos_next.api.product_management.update_item_buying_price", {
+			item_code: itemCode,
+			buying_price: rate,
+			pos_profile: settingsStore.settings.pos_profile || null,
+		});
+		showSuccess(__("Buying price updated"));
+	} catch (error) {
+		showError(error?.message || __("Failed to update buying price"));
+	}
+}
 
 // Tooltip message for why rate editing is disabled
 const rateEditDisabledReason = computed(() => {
@@ -607,6 +702,7 @@ watch(
 			// Store original price_list_rate for rate edit validation
 			originalPriceListRate.value = newItem.price_list_rate || newItem.rate || 0;
 			localWarehouse.value = newItem.warehouse || props.warehouses[0]?.name || "";
+			loadBuyingInfo(newItem.item_code);
 
 			// Initialize serial numbers
 			if (newItem.has_serial_no && newItem.serial_no) {
@@ -914,6 +1010,19 @@ function updateItem() {
 				return;
 			}
 		}
+	}
+
+	const buyingPriceChanged =
+		buyingInfo.value.enabled &&
+		buyingInfo.value.can_edit &&
+		Number(localBuyingPrice.value || 0) !== Number(buyingInfo.value.buying_price || 0);
+	if (buyingPriceChanged) {
+		if (Number.isNaN(Number(localBuyingPrice.value)) || localBuyingPrice.value < 0) {
+			showError(__("Buying price must be zero or greater"));
+			return;
+		}
+		// Saved straight to the buying price list; the cart line is unaffected.
+		saveBuyingPrice(localItem.value.item_code, Number(localBuyingPrice.value || 0));
 	}
 
 	const updatedItem = {

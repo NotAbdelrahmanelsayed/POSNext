@@ -25,6 +25,11 @@ MAX_PAGE_LENGTH = 100
 POS_ITEM_CODE_SERIES = "POS-ITEM-.#####"
 ALLOWED_IMAGE_PREFIXES = ("/files/", "/private/files/")
 
+# Per-site opt-in (site_config.json) that adds the buying price and the date
+# prices last changed to the product form. Off by default so other sites see
+# the stock form.
+BUYING_PRICE_SITE_FLAG = "pos_next_product_buying_price"
+
 
 def _validate_pos_profile_access(pos_profile: str) -> None:
 	"""Ensure the session user may act through this POS Profile.
@@ -66,6 +71,91 @@ def get_product_management_permissions() -> dict:
 		and (can_create_item or can_write_item)
 		and (can_create_price or can_write_price),
 	}
+
+
+def _get_buying_price_list() -> str | None:
+	"""Buying Price List to edit from the product form, or None when the site
+	has not opted in or the user cannot read Item Prices."""
+	if not cint(frappe.conf.get(BUYING_PRICE_SITE_FLAG)):
+		return None
+	if not frappe.has_permission("Item Price", "read"):
+		return None
+	return frappe.db.get_single_value("Buying Settings", "buying_price_list") or None
+
+
+@frappe.whitelist()
+def get_product_form_settings() -> dict:
+	"""Optional product-form fields enabled for this site."""
+	buying_price_list = _get_buying_price_list()
+	return {
+		"show_buying_price": bool(buying_price_list),
+		"buying_price_list": buying_price_list,
+	}
+
+
+def _item_price_info(
+	item_code: str, buying_price_list: str, selling_price_list: str | None, warehouse: str | None = None
+) -> dict:
+	"""Buying price, falling back to the valuation rate when the item has no
+	row on the buying price list. `buying_price_source` tells the two apart."""
+	buying = _get_price_rows([item_code], buying_price_list).get(item_code)
+	selling = _get_price_rows([item_code], selling_price_list).get(item_code)
+	if buying:
+		buying_price, source = buying.price_list_rate, "price_list"
+	else:
+		buying_price = _get_valuation_rate(item_code, warehouse)
+		source = "valuation_rate" if buying_price else None
+	return {
+		"buying_price": buying_price,
+		"buying_price_source": source,
+		"price_updated_on": max((row.modified for row in (buying, selling) if row), default=None),
+	}
+
+
+def _get_valuation_rate(item_code: str, warehouse: str | None) -> float:
+	"""Warehouse valuation rate (Bin), else the item's own valuation rate."""
+	rate = 0.0
+	if warehouse:
+		rate = flt(frappe.db.get_value("Bin", {"item_code": item_code, "warehouse": warehouse}, "valuation_rate"))
+	return rate or flt(frappe.db.get_value("Item", item_code, "valuation_rate"))
+
+
+def _profile_selling_price_list(pos_profile: str | None) -> str | None:
+	if not pos_profile:
+		return None
+	_validate_pos_profile_access(pos_profile)
+	return frappe.get_cached_doc("POS Profile", pos_profile).selling_price_list
+
+
+@frappe.whitelist()
+def get_item_buying_price(
+	item_code: str, pos_profile: str | None = None, warehouse: str | None = None
+) -> dict:
+	"""Buying price and last price change for the cart's item edit dialog."""
+	buying_price_list = _get_buying_price_list()
+	if not buying_price_list:
+		return {"enabled": False}
+	return {
+		"enabled": True,
+		"can_edit": bool(frappe.has_permission("Item Price", "write")),
+		**_item_price_info(item_code, buying_price_list, _profile_selling_price_list(pos_profile), warehouse),
+	}
+
+
+@frappe.whitelist(methods=["POST"])
+def update_item_buying_price(item_code: str, buying_price: float, pos_profile: str | None = None) -> dict:
+	"""Set the item's rate on the buying price list from the cart's item edit dialog."""
+	buying_price_list = _get_buying_price_list()
+	if not buying_price_list:
+		frappe.throw(_("Buying price editing is not enabled on this site"))
+	rate = flt(buying_price)
+	if rate < 0:
+		frappe.throw(_("Buying price must be zero or greater"))
+	if not frappe.db.exists("Item", item_code):
+		frappe.throw(_("Item {0} not found").format(item_code))
+	selling_price_list = _profile_selling_price_list(pos_profile)
+	_upsert_item_price(item_code, buying_price_list, rate, "buying")
+	return _item_price_info(item_code, buying_price_list, selling_price_list)
 
 
 @frappe.whitelist()
@@ -193,23 +283,34 @@ def get_products(
 			item.uom_conversions = conversion_map.get(item.name, [])
 
 	# Fetch prices
-	if items and pos_profile_doc.selling_price_list:
-		prices = frappe.get_all(
-			"Item Price",
-			filters={
-				"item_code": ["in", item_codes],
-				"price_list": pos_profile_doc.selling_price_list,
-			},
-			fields=["item_code", "price_list_rate"],
-		)
-		price_map = {p.item_code: p.price_list_rate for p in prices}
+	selling_prices = _get_price_rows(item_codes, pos_profile_doc.selling_price_list)
+	for item in items:
+		item.price = selling_prices[item.name].price_list_rate if item.name in selling_prices else 0.0
+
+	buying_price_list = _get_buying_price_list()
+	if buying_price_list:
+		buying_prices = _get_price_rows(item_codes, buying_price_list)
 		for item in items:
-			item.price = price_map.get(item.name, 0.0)
-	else:
-		for item in items:
-			item.price = 0.0
+			buying = buying_prices.get(item.name)
+			selling = selling_prices.get(item.name)
+			item.buying_price = buying.price_list_rate if buying else 0.0
+			item.price_updated_on = max(
+				(row.modified for row in (buying, selling) if row), default=None
+			)
 
 	return items
+
+
+def _get_price_rows(item_codes: list, price_list: str | None) -> dict:
+	"""Map item_code -> Item Price row (rate + modified) for one price list."""
+	if not item_codes or not price_list:
+		return {}
+	prices = frappe.get_all(
+		"Item Price",
+		filters={"item_code": ["in", item_codes], "price_list": price_list},
+		fields=["item_code", "price_list_rate", "modified"],
+	)
+	return {p.item_code: p for p in prices}
 
 
 @frappe.whitelist()
@@ -280,35 +381,61 @@ def save_product(pos_profile: str, data: str) -> dict:
 	# Handle Price
 	price_list = pos_profile_doc.selling_price_list
 	if price_list and "price" in data:
-		new_price = flt(data.get("price"))
+		_upsert_item_price(item.name, price_list, flt(data.get("price")), "selling")
 
-		# Find existing price
-		existing_price = frappe.db.get_value(
+	result = {"item_code": item.name}
+
+	buying_price_list = _get_buying_price_list()
+	if buying_price_list:
+		buying_price = flt(data.get("buying_price"))
+		# A blank buying price on a product that has none is not a price.
+		has_buying_row = frappe.db.exists("Item Price", {"item_code": item.name, "price_list": buying_price_list})
+		if "buying_price" in data and (buying_price or has_buying_row):
+			_upsert_item_price(item.name, buying_price_list, buying_price, "buying")
+		latest = frappe.get_all(
 			"Item Price",
-			{"item_code": item.name, "price_list": price_list},
-			"name",
+			filters={
+				"item_code": item.name,
+				"price_list": ["in", [p for p in (price_list, buying_price_list) if p]],
+			},
+			pluck="modified",
+			order_by="modified desc",
+			limit=1,
 		)
-
-		if existing_price:
-			if not frappe.has_permission("Item Price", "write"):
-				frappe.throw(_("Not permitted to write Item Price"))
-			price_doc = frappe.get_doc("Item Price", existing_price)
-			price_doc.price_list_rate = new_price
-			price_doc.save()
-		else:
-			if not frappe.has_permission("Item Price", "create"):
-				frappe.throw(_("Not permitted to create Item Price"))
-			price_doc = frappe.new_doc("Item Price")
-			price_doc.item_code = item.name
-			price_doc.price_list = price_list
-			price_doc.price_list_rate = new_price
-			price_doc.selling = 1
-			price_doc.save()
+		result["price_updated_on"] = latest[0] if latest else None
 
 	# No explicit frappe.db.commit() — the framework commits at the end of a
 	# successful request and rolls back on exception. Committing here would
 	# defeat that rollback and also commit unrelated pending work.
-	return {"item_code": item.name}
+	return result
+
+
+def _upsert_item_price(item_code: str, price_list: str, rate: float, side: str) -> None:
+	"""Create or update the item's rate on a price list. An unchanged rate is
+	left alone so the row's modified date keeps meaning "price last changed"."""
+	existing_price = frappe.db.get_value(
+		"Item Price",
+		{"item_code": item_code, "price_list": price_list},
+		"name",
+	)
+
+	if existing_price:
+		price_doc = frappe.get_doc("Item Price", existing_price)
+		if flt(price_doc.price_list_rate) == rate:
+			return
+		if not frappe.has_permission("Item Price", "write"):
+			frappe.throw(_("Not permitted to write Item Price"))
+		price_doc.price_list_rate = rate
+		price_doc.save()
+	else:
+		if not frappe.has_permission("Item Price", "create"):
+			frappe.throw(_("Not permitted to create Item Price"))
+		price_doc = frappe.new_doc("Item Price")
+		price_doc.item_code = item_code
+		price_doc.price_list = price_list
+		price_doc.price_list_rate = rate
+		price_doc.set(side, 1)
+		price_doc.save()
 
 
 @frappe.whitelist()
