@@ -43,10 +43,12 @@ try:
 	from erpnext.accounts.doctype.pricing_rule.utils import (
 		get_applied_pricing_rules as erpnext_get_applied_pricing_rules,
 	)
+	from pos_next.overrides.pricing_rule import apply_min_max_price_discounts
 except Exception:  # pragma: no cover - ERPNext not installed in some environments
 	erpnext_apply_pricing_rule = None
 	erpnext_get_applied_pricing_rules = None
 	erpnext_apply_pricing_rule_on_transaction = None
+	apply_min_max_price_discounts = None
 
 
 # ==========================================
@@ -1314,6 +1316,7 @@ def submit_invoice(invoice=None, data=None):
 
 	try:
 		invoice_name = invoice.get("name")
+		freshly_created = False
 
 		# Get or create invoice
 		if not invoice_name or not frappe.db.exists(doctype, invoice_name):
@@ -1324,6 +1327,7 @@ def submit_invoice(invoice=None, data=None):
 			if not invoice_name:
 				frappe.throw(_("Failed to get invoice name from draft"))
 			invoice_doc = frappe.get_doc(doctype, invoice_name)
+			freshly_created = True
 		else:
 			invoice_doc = frappe.get_doc(doctype, invoice_name)
 			invoice_doc.update(invoice)
@@ -1343,8 +1347,9 @@ def submit_invoice(invoice=None, data=None):
 		if invoice_doc.get("is_return") and invoice_doc.get("return_against"):
 			invoice_doc.update_outstanding_for_self = 0
 
-		# Copy accounting dimensions from POS Profile if not already set
-		if pos_profile and not invoice_doc.get("branch"):
+		# update_invoice already applied branch and payment account setup when
+		# this request created the draft. Avoid doing those lookups twice.
+		if not freshly_created and pos_profile and not invoice_doc.get("branch"):
 			try:
 				pos_profile_doc = frappe.get_cached_doc("POS Profile", pos_profile)
 				if hasattr(pos_profile_doc, "branch") and pos_profile_doc.branch:
@@ -1359,8 +1364,7 @@ def submit_invoice(invoice=None, data=None):
 					f"Failed to set branch from POS Profile {pos_profile}: {e}", "POS Profile Branch"
 				)
 
-		# Set accounts for all payment methods before saving
-		if doctype == "Sales Invoice" and hasattr(invoice_doc, "payments"):
+		if not freshly_created and doctype == "Sales Invoice" and hasattr(invoice_doc, "payments"):
 			_set_payment_accounts(invoice_doc.payments, invoice_doc.company)
 
 		# Handle sales team (multiple sales persons)
@@ -1626,7 +1630,7 @@ def get_invoice(invoice_name):
 @frappe.whitelist()
 def get_invoices(pos_profile: str, limit: int = 100, start: int = 0, search_term: str | None = None) -> list:
 	"""
-	Get list of invoices for a POS Profile.
+	Get paginated, server-side filtered list of invoices for a POS Profile.
 
 	Args:
 		pos_profile: POS Profile name
@@ -1636,7 +1640,7 @@ def get_invoices(pos_profile: str, limit: int = 100, start: int = 0, search_term
 			or item code/name (min 2 chars; shorter terms are ignored)
 
 	Returns:
-		List of invoices with details
+		List of invoice dicts with basic fields (no per-invoice item loading)
 	"""
 	if not pos_profile:
 		frappe.throw(_("POS Profile is required"))
@@ -1644,9 +1648,8 @@ def get_invoices(pos_profile: str, limit: int = 100, start: int = 0, search_term
 	limit = cint(limit) or 100
 	start = cint(start) or 0
 
-	# Check if user has access to this POS Profile
+	# Permission check
 	has_access = frappe.db.exists("POS Profile User", {"parent": pos_profile, "user": frappe.session.user})
-
 	if not has_access and not frappe.has_permission("Sales Invoice", "read"):
 		frappe.throw(_("You don't have access to this POS Profile"))
 
@@ -3234,6 +3237,12 @@ def apply_offers(invoice_data, selected_offers=None):
 					# Fetch full pricing rule to get discount values
 					full_rule = frappe.get_cached_doc("Pricing Rule", rule_name)
 
+					# Min/Max rules are deferred to apply_min_max_price_discounts
+					# (cross-item ranking). Applying them here would discount every
+					# matching item, defeating the "cheapest/most-expensive" logic.
+					if full_rule.get("apply_discount_on_price") in ("Min", "Max"):
+						continue
+
 					if full_rule.rate_or_discount == "Discount Percentage" and full_rule.discount_percentage:
 						discount_percentage += flt(full_rule.discount_percentage)
 					elif full_rule.rate_or_discount == "Discount Amount" and full_rule.discount_amount:
@@ -3300,6 +3309,33 @@ def apply_offers(invoice_data, selected_offers=None):
 		for key, free_item_doc in txn_result.get("free_items", {}).items():
 			free_items_map.setdefault(key, free_item_doc)
 		applied_rules.update(txn_result.get("applied_rules", set()))
+
+		# Apply Min/Max ("cheapest/most-expensive item") price rules. These were
+		# deferred by the per-item engine (see pos_next.overrides.pricing_rule) and
+		# need a cross-item ranking pass over the whole cart. The mock doc has no
+		# calculate_taxes_and_totals(); the post-processor materialises rate/amount
+		# on each discounted item directly.
+		if apply_min_max_price_discounts:
+			mock_doc = frappe._dict(
+				{
+					"doctype": invoice.get("doctype") or "Sales Invoice",
+					"items": prepared_items,
+					"selling_price_list": pricing_args.price_list,
+					"company": pricing_args.company,
+					"customer": pricing_args.customer,
+				}
+			)
+			min_max_allowed = set(rule_map) if selected_offer_names else None
+			apply_min_max_price_discounts(mock_doc, allowed_rules=min_max_allowed)
+
+		# Surface Min/Max rules in the response so the frontend tracks them as applied.
+		if erpnext_get_applied_pricing_rules:
+			for prepared_item in prepared_items:
+				if not prepared_item.get("pricing_rules"):
+					continue
+				for pr_name in erpnext_get_applied_pricing_rules(prepared_item.get("pricing_rules")):
+					if pr_name in rule_map:
+						applied_rules.add(pr_name)
 
 		return {
 			"items": [dict(item) for item in prepared_items],

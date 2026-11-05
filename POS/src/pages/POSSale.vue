@@ -100,6 +100,25 @@
 						<span>{{ __("Invoice History") }}</span>
 					</button>
 					<button
+						@click="navigateToShiftHistory"
+						class="w-full text-start px-4 py-2.5 text-sm text-gray-700 hover:bg-indigo-50 flex items-center gap-3 transition-colors"
+					>
+						<svg
+							class="w-5 h-5 text-indigo-600"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+							/>
+						</svg>
+						<span>{{ __("Shift History") }}</span>
+					</button>
+					<button
 						v-if="offlineStore.pendingInvoicesCount > 0"
 						@click="
 							uiStore.showOfflineInvoicesDialog = true;
@@ -259,7 +278,10 @@
 				style="max-height: calc(100vh - 60px - var(--header-height, 60px))"
 			>
 				<!-- Icon-Only Management Slider - Always Visible -->
-				<ManagementSlider @menu-clicked="handleManagementMenuClick" />
+				<ManagementSlider
+					:can-access-product-management="canAccessProductManagement"
+					@menu-clicked="handleManagementMenuClick"
+				/>
 
 				<!-- Main Content Container -->
 				<div
@@ -442,6 +464,7 @@
 								:allow-cash-loan="canGiveCashLoan"
 								@show-cash-loan="openCashLoanDialog"
 								@close-shift="handleCloseShift"
+								@show-shift-history="navigateToShiftHistory"
 							/>
 						</div>
 					</keep-alive>
@@ -678,6 +701,13 @@
 				@return-created="handleReturnCreated"
 			/>
 
+			<!-- Shift History Dialog -->
+			<ShiftHistoryDialog
+				v-model="showShiftHistoryDialog"
+				:pos-profile="shiftStore.profileName"
+				:currency="shiftStore.profileCurrency"
+			/>
+
 			<!-- Offline Invoices Dialog -->
 			<OfflineInvoicesDialog
 				v-model="uiStore.showOfflineInvoicesDialog"
@@ -709,6 +739,14 @@
 				:company="shiftStore.profileCompany"
 				:currency="shiftStore.profileCurrency"
 				@promotion-saved="handlePromotionSaved"
+			/>
+
+			<!-- Product Management -->
+			<ProductManagement
+				v-model="showProductManagement"
+				:pos-profile="shiftStore.profileName"
+				:company="shiftStore.profileCompany"
+				:currency="shiftStore.profileCurrency"
 			/>
 
 			<!-- POS Settings -->
@@ -1080,8 +1118,10 @@
 // Module-scoped init guard — prevents redundant heavy initialization
 // when component remounts due to translationVersion changes.
 // Tracks the profile+shift key so a user/shift change correctly re-initializes.
-let _initializedKey = null
-let _posInitPromise = null
+// biome-ignore lint/style/useConst: Reassigned from script setup lifecycle handlers.
+let _initializedKey = null;
+// biome-ignore lint/style/useConst: Reassigned from script setup lifecycle handlers.
+let _posInitPromise = null;
 </script>
 
 <script setup>
@@ -1100,11 +1140,13 @@ import CustomerDialog from "@/components/sale/CustomerDialog.vue";
 import DraftInvoicesDialog from "@/components/sale/DraftInvoicesDialog.vue";
 import InvoiceCart from "@/components/sale/InvoiceCart.vue";
 import InvoiceHistoryDialog from "@/components/sale/InvoiceHistoryDialog.vue";
+import ShiftHistoryDialog from "@/components/sale/ShiftHistoryDialog.vue";
 import ItemSelectionDialog from "@/components/sale/ItemSelectionDialog.vue";
 import ItemsSelector from "@/components/sale/ItemsSelector.vue";
 import OffersDialog from "@/components/sale/OffersDialog.vue";
 import OfflineInvoicesDialog from "@/components/sale/OfflineInvoicesDialog.vue";
 import PaymentDialog from "@/components/sale/PaymentDialog.vue";
+import ProductManagement from "@/components/sale/ProductManagement.vue";
 import PromotionManagement from "@/components/sale/PromotionManagement.vue";
 import ReturnInvoiceDialog from "@/components/sale/ReturnInvoiceDialog.vue";
 import ExpenseDialog from "@/components/sale/ExpenseDialog.vue";
@@ -1249,6 +1291,10 @@ function computeCartHash() {
 // Promotion dialog
 const showPromotionManagement = ref(false);
 
+// Product Management dialog
+const showProductManagement = ref(false);
+const canAccessProductManagement = ref(false);
+
 // Settings dialog
 const showPOSSettings = ref(false);
 
@@ -1267,6 +1313,9 @@ const selectedInvoiceForView = ref(null);
 
 // Invoice history data (used by InvoiceManagement component)
 const invoiceHistoryData = ref([]);
+
+// Shift History dialog
+const showShiftHistoryDialog = ref(false);
 
 // Stock sync status
 const isStockSyncActive = ref(false);
@@ -1298,10 +1347,23 @@ watch(
 	(newProfile) => {
 		if (newProfile) {
 			warehousesResource.reload();
+			loadProductManagementPermissions();
 		}
 	},
 	{ immediate: true }
 );
+
+async function loadProductManagementPermissions() {
+	try {
+		const result = await call(
+			"pos_next.api.product_management.get_product_management_permissions"
+		);
+		canAccessProductManagement.value = Boolean(result?.can_access);
+	} catch (error) {
+		log.error("Error loading product management permissions:", error);
+		canAccessProductManagement.value = false;
+	}
+}
 
 // Computed for warehouses - returns all warehouses for the company
 const profileWarehouses = computed(() => {
@@ -2203,17 +2265,12 @@ async function handlePaymentCompleted(paymentData) {
 			return;
 		}
 
-		cartStore.payments = [];
-		if (paymentData.payments && Array.isArray(paymentData.payments)) {
-			paymentData.payments.forEach((p) => {
-				cartStore.payments.push({
-					...p,
-					mode_of_payment: p.mode_of_payment,
-					amount: p.amount,
-					type: p.type,
-				});
-			});
-		}
+		cartStore.payments = (paymentData.payments || []).map((p) => ({
+			...p,
+			mode_of_payment: p.mode_of_payment,
+			amount: p.amount,
+			type: p.type,
+		}));
 
 		// Store sales team data if provided
 		if (paymentData.sales_team && Array.isArray(paymentData.sales_team)) {
@@ -2396,10 +2453,11 @@ async function handlePaymentCompleted(paymentData) {
 					draftsStore.deleteDraft(draftIdToDelete);
 				}
 
-				// Refresh stock - Direct API (50-200ms), no Socket.IO lag!
-				await stockStore.refresh(soldItemCodes, shiftStore.profileWarehouse);
+				// Do not keep the cashier waiting for cache refreshes after posting.
+				stockStore.refresh(soldItemCodes, shiftStore.profileWarehouse).catch((err) =>
+					log.debug("Background stock refresh failed:", err)
+				);
 
-				// Refresh invoice history cache in background (non-blocking)
 				loadInvoiceHistoryData().catch((err) =>
 					log.debug("Background invoice cache refresh failed:", err)
 				);
@@ -2577,6 +2635,10 @@ function handleCloseShift() {
 	}
 
 	uiStore.showCloseShiftDialog = true;
+}
+
+function navigateToShiftHistory() {
+	showShiftHistoryDialog.value = true;
 }
 
 function openDraftDialog() {
@@ -3090,6 +3152,8 @@ function restoreBodyStyles() {
 function handleManagementMenuClick(menuItem) {
 	if (menuItem === "promotions") {
 		showPromotionManagement.value = true;
+	} else if (menuItem === "product-management") {
+		showProductManagement.value = true;
 	} else if (menuItem === "settings") {
 		showPOSSettings.value = true;
 	} else if (menuItem === "invoices") {

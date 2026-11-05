@@ -3115,11 +3115,12 @@ watch(
 	{ immediate: true }
 );
 
-// Pre-fetch customer balance when customer changes (before dialog opens)
-// This ensures data is available immediately when dialog opens
+// Fetch only while visible. Cart reset changes the customer after every sale;
+// fetching while hidden creates redundant background requests.
 watch(
 	() => [props.customer, props.company, props.allowCreditSale, props.allowCustomerCreditPayment],
 	([customer, company, allowCreditSale, allowCustomerCreditPayment]) => {
+		if (!show.value) return;
 		const creditEnabled = allowCreditSale || allowCustomerCreditPayment;
 		if (creditEnabled && customer && company) {
 			log.debug("[PaymentDialog] Pre-fetching customer balance for:", customer);
